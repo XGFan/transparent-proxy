@@ -1,6 +1,5 @@
 ip rule delete fwmark 1 table 100
 ip route flush table 100
-ip route del local 0.0.0.0/0 dev lo table
 
 iptables -t mangle -D PREROUTING -i br-lan -j V2RAY
 iptables -t mangle -D PREROUTING -m mark --mark 1 -j V2RAY
