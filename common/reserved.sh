@@ -4,7 +4,6 @@ if [ $? -ne 0 ]; then
 fi
 ipset flush reserved_ip
 
-
 while read ip;do
 	ipset add reserved_ip $ip
 done</etc/transparent-proxy/reserved_ip.txt
