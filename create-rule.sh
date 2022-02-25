@@ -4,9 +4,10 @@ ip route add local 0.0.0.0/0 dev lo table 100 #所有包都走lo
 # 代理局域网设备
 iptables -t mangle -N V2RAY
 iptables -t mangle -A V2RAY -m mark --mark 0xff -j RETURN 
+iptables -t mangle -A V2RAY -m set --match-set reserved_ip dst -j RETURN 
+iptables -t mangle -A V2RAY -m set --match-set proxy_src src -p tcp -j TPROXY --on-port 1082 --tproxy-mark 0x1/0x1
 iptables -t mangle -A V2RAY -m set --match-set direct_src src -j RETURN 
 iptables -t mangle -A V2RAY -m set --match-set direct_dst dst -j RETURN 
-iptables -t mangle -A V2RAY -m set --match-set reserved_ip dst -j RETURN 
 iptables -t mangle -A V2RAY -m set --match-set chnroute dst -j RETURN 
 iptables -t mangle -A V2RAY -p tcp -j TPROXY --on-port 1081 --tproxy-mark 0x1/0x1
 
