@@ -12,11 +12,12 @@ steps:
       GOARCH: amd64
     commands:
       - cd watchdog
-      - go build -o watchdog
+      - go build -o watchdog-bin
+      - cp watchdog-bin ../
   - name: upx
     image: hairyhenderson/upx:3.96
     commands:
-      - upx watchdog/watchdog
+      - upx watchdog-bin
   - name: scp files
     image: appleboy/drone-scp
     settings:
@@ -27,7 +28,7 @@ steps:
       key:
         from_secret: ssh_key
       port: 22
-      source: watchdog/watchdog
+      source: watchdog-bin
       target: ~/
   - name: ssh deploy
     image: appleboy/drone-ssh
@@ -40,7 +41,7 @@ steps:
         from_secret: ssh_key
       port: 22
       script:
-        - mv ~/watchdog /etc/transparent-proxy/watchdog
+        - mv ~/watchdog-bin /etc/transparent-proxy/watchdog
         - /etc/init.d/transparent-proxy-watchdog restart
   - name: notification
     when:
