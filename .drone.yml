@@ -1,0 +1,58 @@
+kind: pipeline
+name: default
+type: kubernetes
+
+steps:
+  - name: build
+    image: golang:1.17
+    environment:
+      GOPROXY: https://registry.test4x.com/repository/go-proxy/
+      CGO_ENABLED: 0
+      GOOS: linux
+      GOARCH: amd64
+    commands:
+      - cd watchdog
+      - go build -o watchdog
+      - mv watchdog ../
+      - cd ../
+      - ls -alh
+  - name: upx
+    image: hairyhenderson/upx:3.96
+    commands:
+      - upx watchdog
+  - name: scp files
+    image: appleboy/drone-scp
+    settings:
+      host:
+        from_secret: server
+      username:
+        from_secret: username
+      key:
+        from_secret: ssh_key
+      port: 22
+      source: watchdog
+      target: ~/
+  - name: ssh deploy
+    image: appleboy/drone-ssh
+    settings:
+      host:
+        from_secret: server
+      username:
+        from_secret: username
+      key:
+        from_secret: ssh_key
+      port: 22
+      script:
+        - mv ~/watchdog /etc/transparent-proxy/watchdog
+        - /etc/init.d/watchdog restart
+  - name: notification
+    when:
+      status:
+        - success
+        - failure
+    image: docker.test4x.com/xgfan/drone-bark:9dccad32
+    settings:
+      token:
+        from_secret: bark_token
+      title: "{DRONE_REPO} {DRONE_BUILD_STATUS}"
+      content: "{DRONE_COMMIT_MESSAGE}"
