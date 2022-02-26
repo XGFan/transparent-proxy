@@ -44,7 +44,7 @@ steps:
       port: 22
       script:
         - mv ~/watchdog /etc/transparent-proxy/watchdog
-        - /etc/init.d/watchdog restart
+        - /etc/init.d/transparent-proxy-watchdog restart
   - name: notification
     when:
       status:
