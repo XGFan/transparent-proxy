@@ -13,13 +13,10 @@ steps:
     commands:
       - cd watchdog
       - go build -o watchdog
-      - mv watchdog ../
-      - cd ../
-      - ls -alh
   - name: upx
     image: hairyhenderson/upx:3.96
     commands:
-      - upx watchdog
+      - upx watchdog/watchdog
   - name: scp files
     image: appleboy/drone-scp
     settings:
@@ -30,7 +27,7 @@ steps:
       key:
         from_secret: ssh_key
       port: 22
-      source: watchdog
+      source: watchdog/watchdog
       target: ~/
   - name: ssh deploy
     image: appleboy/drone-ssh
