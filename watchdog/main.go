@@ -3,15 +3,33 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gonetx/ipset"
-	"github.com/labstack/echo/v4"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 )
+
+var ops IpSetOps
+
+func init() {
+	if err := ipset.Check(); err != nil {
+		panic(err)
+	}
+	ops = IpSetOps{
+		directSrc: createIpSetIfNotExist("direct_src"),
+		directDst: createIpSetIfNotExist("direct_dst"),
+		proxySrc:  createIpSetIfNotExist("proxy_src"),
+		proxyDst:  createIpSetIfNotExist("proxy_dst"),
+	}
+}
+
+type IpSetOps struct {
+	directSrc, directDst, proxySrc, proxyDst *HashSet
+}
 
 type HashSet struct {
 	file string
@@ -50,7 +68,7 @@ func (set *HashSet) save() error {
 	return os.WriteFile(set.file, []byte(strings.Join(info.Entries, "\n")), 0644)
 }
 
-func getHashSet(name string) *HashSet {
+func createIpSetIfNotExist(name string) *HashSet {
 	set, err := ipset.New(name,
 		ipset.HashNet,
 		ipset.HashSize(64),
@@ -60,82 +78,91 @@ func getHashSet(name string) *HashSet {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	return &HashSet{fmt.Sprintf("/etc/transparent-proxy/%s.txt", name), set}
-}
-
-func init() {
-	if err := ipset.Check(); err != nil {
-		panic(err)
+	initFile := fmt.Sprintf("/etc/transparent-proxy/%s.txt", name)
+	if _, err = os.Stat(initFile); err != nil {
+		if os.IsNotExist(err) {
+			create, _ := os.Create(initFile)
+			defer create.Close()
+		} else {
+			log.Fatalln(err)
+		}
 	}
+	return &HashSet{initFile, set}
 }
 
-type IpSetOps struct {
-	directSrc, directDst, proxySrc *HashSet
-}
-
-func (ops IpSetOps) status(c echo.Context) error {
-	//reserved_ip_list, _ := reserved_ip.List()
+func (ops IpSetOps) status(res http.ResponseWriter, req *http.Request) {
 	directSrcList, _ := ops.directSrc.List()
 	directDstList, _ := ops.directDst.List()
 	proxySrcList, _ := ops.proxySrc.List()
-	return c.JSON(http.StatusOK, []*ipset.Info{directSrcList, directDstList, proxySrcList})
+	proxyDstList, _ := ops.proxyDst.List()
+	res.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(res).Encode(map[string]interface{}{
+		"ip":   currentIP(req),
+		"sets": []*ipset.Info{directSrcList, directDstList, proxySrcList, proxyDstList},
+	})
 }
 
-func (ops IpSetOps) auto(c echo.Context) error {
-	ip := currentIP(c)
+func (ops IpSetOps) auto(res http.ResponseWriter, req *http.Request) {
+	ip := currentIP(req)
 	if e := ops.directSrc.remove(ip); e != nil {
-		return c.JSON(http.StatusInternalServerError, e.Error())
+		handleError(res, e)
+		return
 	}
 	if e := ops.proxySrc.remove(ip); e != nil {
-		return c.JSON(http.StatusInternalServerError, e.Error())
+		handleError(res, e)
+		return
 	}
-	return c.String(http.StatusOK, "ok")
+	_, _ = res.Write([]byte("ok"))
 }
 
-func (ops IpSetOps) proxy(c echo.Context) error {
-	ip := currentIP(c)
+func (ops IpSetOps) proxy(res http.ResponseWriter, req *http.Request) {
+	ip := currentIP(req)
 	if e := ops.directSrc.remove(ip); e != nil {
-		return c.JSON(http.StatusInternalServerError, e.Error())
+		handleError(res, e)
+		return
 	}
 	if e := ops.proxySrc.add(ip); e != nil {
-		return c.JSON(http.StatusInternalServerError, e.Error())
+		handleError(res, e)
+		return
 	}
-	return c.String(http.StatusOK, "ok")
+	_, _ = res.Write([]byte("ok"))
 }
 
-func (ops IpSetOps) direct(c echo.Context) error {
-	ip := currentIP(c)
+func (ops IpSetOps) direct(res http.ResponseWriter, req *http.Request) {
+	ip := currentIP(req)
 	if e := ops.directSrc.add(ip); e != nil {
-		return c.JSON(http.StatusInternalServerError, e.Error())
+		handleError(res, e)
+		return
 	}
 	if e := ops.proxySrc.remove(ip); e != nil {
-		return c.JSON(http.StatusInternalServerError, e.Error())
+		handleError(res, e)
+		return
 	}
-	return c.String(http.StatusOK, "ok")
+	_, _ = res.Write([]byte("ok"))
 }
 
-func currentIP(c echo.Context) string {
-	ip := c.QueryParam("ip")
+func currentIP(req *http.Request) string {
+	ip := req.URL.Query().Get("ip")
 	if ip == "" {
-		ip, _, _ = net.SplitHostPort(c.Request().RemoteAddr)
+		ip, _, _ = net.SplitHostPort(req.RemoteAddr)
 	}
 	return ip
 }
 
-func main() {
-	ops := IpSetOps{
-		directSrc: getHashSet("direct_src"),
-		directDst: getHashSet("direct_dst"),
-		proxySrc:  getHashSet("proxy_src"),
-	}
-	e := echo.New()
-	e.Any("/", ops.status)
-	e.Any("/ip", func(context echo.Context) error {
-		return context.String(http.StatusOK, currentIP(context))
-	})
-	e.Any("/auto", ops.auto)
-	e.Any("/proxy", ops.proxy)
-	e.Any("/direct", ops.direct)
+func handleError(res http.ResponseWriter, e error) {
+	res.WriteHeader(500)
+	res.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(res).Encode(e.Error())
+	return
+}
 
-	e.Logger.Fatal(e.Start(":1323"))
+func main() {
+	http.HandleFunc("/", ops.status)
+	http.HandleFunc("/ip", func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte(currentIP(request)))
+	})
+	http.HandleFunc("/auto", ops.auto)
+	http.HandleFunc("/proxy", ops.proxy)
+	http.HandleFunc("/direct", ops.direct)
+	log.Fatalln(http.ListenAndServe(":1333", nil))
 }
