@@ -85,13 +85,13 @@ create_proxy_src() {
 }
 
 create_proxy_dst() {
-  ipset -L proxy_src >/dev/null 2>&1
+  ipset -L proxy_dst >/dev/null 2>&1
   if [ $? -ne 0 ]; then
-    ipset create proxy_src hash:net hashsize 64 family inet
+    ipset create proxy_dst hash:net hashsize 64 family inet
   fi
-  ipset flush proxy_src
+  ipset flush proxy_dst
   while IFS= read -r ip || [ -n "$ip" ]; do
-    ipset add proxy_src "$ip"
+    ipset add proxy_dst "$ip"
   done <"$RULE_PATH/proxy_dst.txt"
 }
 
