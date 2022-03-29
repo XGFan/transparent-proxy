@@ -3,17 +3,27 @@
 package main
 
 import (
+	"context"
+	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gonetx/ipset"
+	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 var ops IpSetOps
+
+const BasePath = "/etc/transparent-proxy"
 
 func init() {
 	if err := ipset.Check(); err != nil {
@@ -36,7 +46,7 @@ type HashSet struct {
 	ipset.IPSet
 }
 
-func (set *HashSet) remove(key string) error {
+func (set *HashSet) RemoveAndFlush(key string) error {
 	exist, err := set.Test(key)
 	if exist {
 		if e := set.Del(key); e == nil {
@@ -48,7 +58,7 @@ func (set *HashSet) remove(key string) error {
 	return err
 }
 
-func (set *HashSet) add(key string) error {
+func (set *HashSet) AddAndFlush(key string) error {
 	exist, err := set.Test(key)
 	if !exist {
 		if e := set.Add(key); e == nil {
@@ -78,7 +88,7 @@ func createIpSetIfNotExist(name string) *HashSet {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	initFile := fmt.Sprintf("/etc/transparent-proxy/%s.txt", name)
+	initFile := fmt.Sprintf("%s/%s.txt", BasePath, name)
 	if _, err = os.Stat(initFile); err != nil {
 		if os.IsNotExist(err) {
 			create, _ := os.Create(initFile)
@@ -104,11 +114,11 @@ func (ops IpSetOps) status(res http.ResponseWriter, req *http.Request) {
 
 func (ops IpSetOps) auto(res http.ResponseWriter, req *http.Request) {
 	ip := currentIP(req)
-	if e := ops.directSrc.remove(ip); e != nil {
+	if e := ops.directSrc.RemoveAndFlush(ip); e != nil {
 		handleError(res, e)
 		return
 	}
-	if e := ops.proxySrc.remove(ip); e != nil {
+	if e := ops.proxySrc.RemoveAndFlush(ip); e != nil {
 		handleError(res, e)
 		return
 	}
@@ -117,11 +127,11 @@ func (ops IpSetOps) auto(res http.ResponseWriter, req *http.Request) {
 
 func (ops IpSetOps) proxy(res http.ResponseWriter, req *http.Request) {
 	ip := currentIP(req)
-	if e := ops.directSrc.remove(ip); e != nil {
+	if e := ops.directSrc.RemoveAndFlush(ip); e != nil {
 		handleError(res, e)
 		return
 	}
-	if e := ops.proxySrc.add(ip); e != nil {
+	if e := ops.proxySrc.AddAndFlush(ip); e != nil {
 		handleError(res, e)
 		return
 	}
@@ -130,15 +140,30 @@ func (ops IpSetOps) proxy(res http.ResponseWriter, req *http.Request) {
 
 func (ops IpSetOps) direct(res http.ResponseWriter, req *http.Request) {
 	ip := currentIP(req)
-	if e := ops.directSrc.add(ip); e != nil {
+	if e := ops.directSrc.AddAndFlush(ip); e != nil {
 		handleError(res, e)
 		return
 	}
-	if e := ops.proxySrc.remove(ip); e != nil {
+	if e := ops.proxySrc.RemoveAndFlush(ip); e != nil {
 		handleError(res, e)
 		return
 	}
 	_, _ = res.Write([]byte("ok"))
+}
+
+func (ops IpSetOps) findIpsetByName(name string) (*HashSet, error) {
+	switch name {
+	case "direct_src":
+		return ops.directSrc, nil
+	case "direct_dst":
+		return ops.directDst, nil
+	case "proxy_src":
+		return ops.proxySrc, nil
+	case "proxy_dst":
+		return ops.proxyDst, nil
+	default:
+		return nil, errors.New("unknown ipset " + name)
+	}
 }
 
 func currentIP(req *http.Request) string {
@@ -156,8 +181,154 @@ func handleError(res http.ResponseWriter, e error) {
 	return
 }
 
+type IpAndSet struct {
+	IP  string `json:"ip"`
+	Set string `json:"set"`
+}
+
+func (ipAndSet *IpAndSet) isValid() bool {
+	return ipAndSet != nil && ipAndSet.Set != "" && ipAndSet.IP != ""
+}
+
+func getCHNRoute() ([]string, error) {
+	//  wget --no-check-certificate -O- 'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
+	// | awk -F\| '/CN\|ipv4/ { printf("%s/%d\n", $4, 32-log($5)/log(2)) }'
+	resp, err := http.Get("http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest")
+	if err != nil {
+		return nil, fmt.Errorf("fetch data fail: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("response status code is: %w", err)
+	}
+	all, err := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("read response data fail: %w", err)
+	}
+	lines := strings.Split(string(all), "\n")
+	ipRanges := make([]string, 0)
+	for _, line := range lines {
+		if line != "" && !strings.HasPrefix(line, "#") {
+			parts := strings.Split(line, "|")
+			if len(parts) >= 6 && parts[1] == "CN" && parts[2] == "ipv4" {
+				float, err := strconv.ParseFloat(parts[4], 64)
+				if err != nil {
+					return nil, fmt.Errorf("parse line %s fail: %w", line, err)
+				}
+				mask := 32 - int8(math.Log2(float))
+				ipRanges = append(ipRanges, fmt.Sprintf("%s/%d", parts[3], mask))
+			}
+		}
+	}
+	return ipRanges, nil
+}
+
+func refreshCHNRoute() error {
+	_, err := ipset.New("chnroute",
+		ipset.HashNet,
+		ipset.HashSize(2048),
+		ipset.Family(ipset.Inet),
+		ipset.MaxElem(65536),
+		ipset.Exist(true))
+	if err != nil {
+		return fmt.Errorf("create or read ipset [chnroute] fail: %w", err)
+	}
+	chnrouteForUpdate, err := ipset.New("chnroute-for-update",
+		ipset.HashNet,
+		ipset.HashSize(2048),
+		ipset.Family(ipset.Inet),
+		ipset.MaxElem(65536),
+		ipset.Exist(true))
+	if err != nil {
+		return fmt.Errorf("create or read ipset [chnroute-for-update] fail: %w", err)
+	}
+	routes, err := getCHNRoute()
+	if err != nil {
+		return err
+	}
+	err = chnrouteForUpdate.Flush()
+	if err != nil {
+		return fmt.Errorf("flush ipset [chnroute-for-update] fail: %w", err)
+	}
+	for _, route := range routes {
+		err := chnrouteForUpdate.Add(route, ipset.Exist(true))
+		if err != nil {
+			return fmt.Errorf("add %s to ipset [chnroute-for-update] fail: %w", route, err)
+		}
+	}
+	err = ipset.Swap("chnroute-for-update", "chnroute")
+	if err != nil {
+		return fmt.Errorf("swap ipsets fail: %w", err)
+	}
+	err = os.WriteFile(fmt.Sprintf("%s/%s", BasePath, "chnroute.txt"), []byte(strings.Join(routes, "\n")), 0644)
+	if err != nil {
+		return fmt.Errorf("save route to chnroute.txt: %w", err)
+	}
+	return nil
+}
+
 func main() {
-	http.HandleFunc("/", ops.status)
+	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		fmt.Println(request.URL)
+	})
+	proxy := httputil.ReverseProxy{
+		Director: func(req *http.Request) {
+			req.URL.Scheme = "http"
+			req.URL.Host = "dns-switchy"
+		},
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return net.DialTimeout("unix", "/var/run/dns-switchy.sock", time.Second*2)
+			},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	http.HandleFunc("/dns/", func(writer http.ResponseWriter, request *http.Request) {
+		proxy.ServeHTTP(writer, request)
+	})
+	http.HandleFunc("/status", ops.status)
+	http.HandleFunc("/refresh-route", func(writer http.ResponseWriter, request *http.Request) {
+		err := refreshCHNRoute()
+		if err != nil {
+			handleError(writer, err)
+		} else {
+			_, _ = writer.Write([]byte("ok"))
+		}
+	})
+	http.HandleFunc("/remove", func(writer http.ResponseWriter, req *http.Request) {
+		ipAndSet := new(IpAndSet)
+		err := json.NewDecoder(req.Body).Decode(ipAndSet)
+		if err != nil {
+			handleError(writer, err)
+			return
+		}
+		if ipAndSet.isValid() {
+			set, err := ops.findIpsetByName(ipAndSet.Set)
+			if err == nil {
+				err = set.RemoveAndFlush(ipAndSet.IP)
+			}
+		}
+		if err != nil {
+			handleError(writer, err)
+		}
+	})
+	http.HandleFunc("/add", func(writer http.ResponseWriter, req *http.Request) {
+		ipAndSet := new(IpAndSet)
+		err := json.NewDecoder(req.Body).Decode(ipAndSet)
+		if err != nil {
+			handleError(writer, err)
+			return
+		}
+		if ipAndSet.isValid() {
+			set, err := ops.findIpsetByName(ipAndSet.Set)
+			if err == nil {
+				err = set.AddAndFlush(ipAndSet.IP)
+			}
+		}
+		if err != nil {
+			handleError(writer, err)
+		}
+	})
 	http.HandleFunc("/ip", func(writer http.ResponseWriter, request *http.Request) {
 		_, _ = writer.Write([]byte(currentIP(request)))
 	})
