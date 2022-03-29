@@ -7,13 +7,15 @@ create_iptables_rules() {
   ip rule add fwmark 1 table 100                #带有mark1的包都发到table 100
   ip route add local 0.0.0.0/0 dev lo table 100 #所有包都走lo
 
+  # src > dst, direct > proxy
   # 代理局域网设备
   iptables -t mangle -N V2RAY
   iptables -t mangle -A V2RAY -m mark --mark 0xff -j RETURN
   iptables -t mangle -A V2RAY -m set --match-set reserved_ip dst -j RETURN
-  iptables -t mangle -A V2RAY -m set --match-set proxy_src src -p tcp -j TPROXY --on-port 1082 --tproxy-mark 0x1/0x1
   iptables -t mangle -A V2RAY -m set --match-set direct_src src -j RETURN
   iptables -t mangle -A V2RAY -m set --match-set direct_dst dst -j RETURN
+  iptables -t mangle -A V2RAY -m set --match-set proxy_src src -p tcp -j TPROXY --on-port 1082 --tproxy-mark 0x1/0x1
+  iptables -t mangle -A V2RAY -m set --match-set proxy_dst dst -p tcp -j TPROXY --on-port 1082 --tproxy-mark 0x1/0x1
   iptables -t mangle -A V2RAY -m set --match-set chnroute dst -j RETURN
   iptables -t mangle -A V2RAY -p tcp -j TPROXY --on-port 1081 --tproxy-mark 0x1/0x1
 
@@ -82,6 +84,17 @@ create_proxy_src() {
   done <"$RULE_PATH/proxy_src.txt"
 }
 
+create_proxy_dst() {
+  ipset -L proxy_src >/dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    ipset create proxy_src hash:net hashsize 64 family inet
+  fi
+  ipset flush proxy_src
+  while IFS= read -r ip || [ -n "$ip" ]; do
+    ipset add proxy_src "$ip"
+  done <"$RULE_PATH/proxy_dst.txt"
+}
+
 create_chnroute() {
   ipset -L chnroute >/dev/null 2>&1
   if [ $? -ne 0 ]; then
@@ -129,6 +142,7 @@ create_ipset() {
   create_direct_src
   create_direct_dst
   create_proxy_src
+  create_proxy_dst
   echo "ipset created"
 }
 
