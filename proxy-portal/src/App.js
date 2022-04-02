@@ -16,7 +16,7 @@ function App() {
         set: set
       }
     })
-      .then(r => axios.get("/api/"))
+      .then(r => axios.get("/api/status"))
       .then(r => setIpsets(r.data.sets))
   }
 
@@ -28,7 +28,7 @@ function App() {
         set: set
       }
     })
-      .then(r => axios.get("/api/"))
+      .then(r => axios.get("/api/status"))
       .then(r => setIpsets(r.data.sets))
   }
   let cards = ipsets.map(it => {
