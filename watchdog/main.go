@@ -4,12 +4,13 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gonetx/ipset"
 	"io"
+	"io/fs"
 	"log"
 	"math"
 	"net"
@@ -22,6 +23,9 @@ import (
 )
 
 var ops IpSetOps
+
+//go:embed  web
+var assetData embed.FS
 
 const BasePath = "/etc/transparent-proxy"
 
@@ -123,6 +127,34 @@ func (ops IpSetOps) auto(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 	_, _ = res.Write([]byte("ok"))
+}
+
+func (ops IpSetOps) test(res http.ResponseWriter, req *http.Request) {
+	ip := currentIP(req)
+	re, err := ops.directDst.Test(ip)
+	res.Header().Add("content-type", "plain/text")
+	if err == nil && re {
+		res.Write([]byte("direct"))
+		return
+	}
+	re, err = ops.proxyDst.Test(ip)
+	if err == nil && re {
+		res.Header().Add("content-type", "plain/text")
+		res.Write([]byte("proxy"))
+		return
+	}
+	chnroute, err := ipset.New("chnroute",
+		ipset.HashNet,
+		ipset.HashSize(2048),
+		ipset.Family(ipset.Inet),
+		ipset.MaxElem(65536),
+		ipset.Exist(true))
+	re, err = chnroute.Test(ip)
+	if err == nil && re {
+		res.Write([]byte("direct"))
+		return
+	}
+	_, _ = res.Write([]byte("unknown"))
 }
 
 func (ops IpSetOps) proxy(res http.ResponseWriter, req *http.Request) {
@@ -267,11 +299,19 @@ func refreshCHNRoute() error {
 	return nil
 }
 
+type FsAdapter struct {
+	forward embed.FS
+}
+
+func (f FsAdapter) Open(name string) (fs.File, error) {
+	if name == "." {
+		return f.forward.Open("web")
+	}
+	return f.forward.Open("web/" + name)
+}
+
 func main() {
-	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		fmt.Println(request.URL)
-	})
-	proxy := httputil.ReverseProxy{
+	dnsProxy := httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.Scheme = "http"
 			req.URL.Host = "dns-switchy"
@@ -280,14 +320,29 @@ func main() {
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				return net.DialTimeout("unix", "/var/run/dns-switchy.sock", time.Second*2)
 			},
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	http.HandleFunc("/dns/", func(writer http.ResponseWriter, request *http.Request) {
-		proxy.ServeHTTP(writer, request)
+	routeProxy := httputil.ReverseProxy{
+		Director: func(req *http.Request) {
+			req.URL.Scheme = "http"
+			req.URL.Host = "v2ray"
+		},
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return net.DialTimeout("unix", "/var/run/v2ray.sock", time.Second*2)
+			},
+		},
+	}
+	serverFs := http.FileServer(http.FS(FsAdapter{assetData}))
+	http.Handle("/", serverFs)
+	http.HandleFunc("/api/dns/", func(writer http.ResponseWriter, request *http.Request) {
+		dnsProxy.ServeHTTP(writer, request)
 	})
-	http.HandleFunc("/status", ops.status)
-	http.HandleFunc("/refresh-route", func(writer http.ResponseWriter, request *http.Request) {
+	http.HandleFunc("/api/route/", func(writer http.ResponseWriter, request *http.Request) {
+		routeProxy.ServeHTTP(writer, request)
+	})
+	http.HandleFunc("/api/status", ops.status)
+	http.HandleFunc("/api/refresh-route", func(writer http.ResponseWriter, request *http.Request) {
 		err := refreshCHNRoute()
 		if err != nil {
 			handleError(writer, err)
@@ -295,7 +350,7 @@ func main() {
 			_, _ = writer.Write([]byte("ok"))
 		}
 	})
-	http.HandleFunc("/remove", func(writer http.ResponseWriter, req *http.Request) {
+	http.HandleFunc("/api/remove", func(writer http.ResponseWriter, req *http.Request) {
 		ipAndSet := new(IpAndSet)
 		err := json.NewDecoder(req.Body).Decode(ipAndSet)
 		if err != nil {
@@ -312,7 +367,7 @@ func main() {
 			handleError(writer, err)
 		}
 	})
-	http.HandleFunc("/add", func(writer http.ResponseWriter, req *http.Request) {
+	http.HandleFunc("/api/add", func(writer http.ResponseWriter, req *http.Request) {
 		ipAndSet := new(IpAndSet)
 		err := json.NewDecoder(req.Body).Decode(ipAndSet)
 		if err != nil {
@@ -329,11 +384,12 @@ func main() {
 			handleError(writer, err)
 		}
 	})
-	http.HandleFunc("/ip", func(writer http.ResponseWriter, request *http.Request) {
+	http.HandleFunc("/api/ip", func(writer http.ResponseWriter, request *http.Request) {
 		_, _ = writer.Write([]byte(currentIP(request)))
 	})
-	http.HandleFunc("/auto", ops.auto)
-	http.HandleFunc("/proxy", ops.proxy)
-	http.HandleFunc("/direct", ops.direct)
-	log.Fatalln(http.ListenAndServe(":1333", nil))
+	http.HandleFunc("/api/auto", ops.auto)
+	http.HandleFunc("/api/proxy", ops.proxy)
+	http.HandleFunc("/api/direct", ops.direct)
+	http.HandleFunc("/api/test", ops.test)
+	log.Fatalln(http.ListenAndServe(":1444", nil))
 }

@@ -1,13 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
-import App from './App';
-import Dns from "./Dns";
+import Route from "./Route";
 
 ReactDOM.render(
   <React.StrictMode>
-    <Dns/>
-    <App/>
+    <Route/>
   </React.StrictMode>,
   document.getElementById('root')
 );

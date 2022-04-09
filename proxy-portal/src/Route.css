@@ -1,0 +1,114 @@
+* {
+  box-sizing: border-box;
+}
+
+.ns {
+  box-sizing: border-box;
+  height: calc(2rem + 20px);
+  padding-bottom: 10px;
+  padding-top: 10px;
+}
+
+.ns {
+  margin-top: 30vh;
+}
+
+.ns > div {
+  margin-left: 25vw;
+  margin-right: 25vw;
+  width: 50%;
+}
+
+@media only screen and (max-width: 1366px) {
+  .ns > div {
+    margin-left: 20vw;
+    margin-right: 20vw;
+    width: 60%;
+  }
+}
+
+@media only screen and (max-width: 800px) {
+  .ns > div {
+    margin-left: 15vw;
+    margin-right: 15vw;
+    width: 70%;
+  }
+}
+
+@media only screen and (max-width: 430px) {
+  .ns > div {
+    margin-left: 5vw;
+    margin-right: 5vw;
+    width: 90%;
+  }
+}
+
+
+.ns input {
+  all: initial;
+  box-sizing: border-box;
+  border: 2px solid #cccccc;
+  min-width: 12rem;
+  width: calc(100% - 6rem);
+  height: 2rem;
+  padding-left: 0.5rem;
+  border-right-width: 2px;
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+}
+
+.ns button {
+  all: initial;
+  box-sizing: border-box;
+  text-align: center;
+  /*padding-left: 1rem;*/
+  /*padding-right: 1rem;*/
+  /*border-left-width: 1px;*/
+  border: 2px solid #cccccc;
+  border-left-style: none;
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+  height: 2rem;
+  width: 6rem;
+}
+
+.tableBox {
+  /*display: block;*/
+  margin-top: 1rem;
+  border-radius: 5px;
+  border: 2px solid #cccccc;
+}
+
+table {
+  min-width: 12rem;
+  width: 100%;
+}
+
+table {
+  border-top-left-radius: 5px;
+  border-collapse: collapse;
+  border-style: hidden;
+}
+
+tr {
+  height: 2rem;
+}
+th, td {
+  border: 2px solid #cccccc;
+}
+
+table > tr:first-child > th:first-child {
+  border-top-left-radius: 5px;
+}
+
+th {
+  text-align: center;
+}
+
+td {
+  text-align: center;
+}
+
+.tableBox span {
+  display: block;
+}
