@@ -1,12 +1,17 @@
-import './App.css';
+import './Ipset.css';
 import axios from "axios";
 import {useEffect, useState} from "react";
 
 
-function App() {
+function Ipset() {
   let [ipsets, setIpsets] = useState([]);
+  let [ip, setIp] = useState('');
+  let [freshClickable, setFreshClickable] = useState(true);
   useEffect(() => {
-    axios.get("/api/status").then(r => setIpsets(r.data.sets))
+    axios.get("/api/status").then(r => {
+      setIpsets(r.data.sets)
+      setIp(r.data.ip)
+    })
   }, [setIpsets])
   let removeIp = function (set, ip) {
     console.log("delete", ip, "from", set)
@@ -19,7 +24,6 @@ function App() {
       .then(r => axios.get("/api/status"))
       .then(r => setIpsets(r.data.sets))
   }
-
   let addIp = function (set, ip) {
     console.log("add", ip, "to", set)
     axios.delete("/api/add", {
@@ -30,6 +34,18 @@ function App() {
     })
       .then(r => axios.get("/api/status"))
       .then(r => setIpsets(r.data.sets))
+  }
+  let refreshCHN = function () {
+    setFreshClickable(false)
+    axios.get("/api/refresh-route")
+      .then(r => {
+        if (r.status === 200) {
+          alert("Refresh Success")
+        }
+      })
+      .finally(() => {
+        setFreshClickable(true)
+      })
   }
   let cards = ipsets.map(it => {
     return (<div className="card" key={it.Name}>
@@ -72,10 +88,16 @@ function App() {
     </div>)
   });
   return (
-    <div className="container">
-      {cards}
+    <div className="ipset">
+      <div className="operation">
+        <span>Your IP: <b>{ip}</b></span>
+        <button disabled={!freshClickable} onClick={refreshCHN}>Update CHNRoute</button>
+      </div>
+      <div className="container">
+        {cards}
+      </div>
     </div>
   );
 }
 
-export default App;
+export default Ipset;

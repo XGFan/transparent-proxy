@@ -147,7 +147,7 @@ function Route() {
     }
   }
   return (
-    <div className={"ns"} onKeyDown={event => {
+    <div className={"route"} onKeyDown={event => {
       if (event.key === "Enter") {
         question(val)
       }
