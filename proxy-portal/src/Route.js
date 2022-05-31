@@ -155,7 +155,7 @@ function Route() {
       <div>
         <input value={val} onChange={event => {
           setVal(event.target.value)
-        }}/>
+        }} spellCheck="false"/>
         <button onClick={event => {
           question(val)
         }}>
