@@ -15,9 +15,12 @@ create_iptables_rules() {
   iptables -t mangle -A V2RAY -m set --match-set direct_src src -j RETURN
   iptables -t mangle -A V2RAY -m set --match-set direct_dst dst -j RETURN
   iptables -t mangle -A V2RAY -m set --match-set proxy_src src -p tcp -j TPROXY --on-port 1082 --tproxy-mark 0x1/0x1
+  iptables -t mangle -A V2RAY -m set --match-set proxy_src src -p udp -j TPROXY --on-port 1082 --tproxy-mark 0x1/0x1
   iptables -t mangle -A V2RAY -m set --match-set proxy_dst dst -p tcp -j TPROXY --on-port 1082 --tproxy-mark 0x1/0x1
+  iptables -t mangle -A V2RAY -m set --match-set proxy_dst dst -p udp -j TPROXY --on-port 1082 --tproxy-mark 0x1/0x1
   iptables -t mangle -A V2RAY -m set --match-set chnroute dst -j RETURN
   iptables -t mangle -A V2RAY -p tcp -j TPROXY --on-port 1081 --tproxy-mark 0x1/0x1
+  iptables -t mangle -A V2RAY -p udp -j TPROXY --on-port 1081 --tproxy-mark 0x1/0x1
 
   iptables -t mangle -A PREROUTING -i br-lan -j V2RAY
   iptables -t mangle -A PREROUTING -m mark --mark 0x1 -j V2RAY
@@ -30,6 +33,7 @@ create_iptables_rules() {
   iptables -t mangle -A V2RAY_MASK -m set --match-set reserved_ip dst -j RETURN
   iptables -t mangle -A V2RAY_MASK -m set --match-set chnroute dst -j RETURN
   iptables -t mangle -A V2RAY_MASK -p tcp -j MARK --set-mark 0x1
+  iptables -t mangle -A V2RAY_MASK -p udp -j MARK --set-mark 0x1
 
   iptables -t mangle -A OUTPUT -j V2RAY_MASK
   echo "iptables rules created"
