@@ -63,6 +63,7 @@ const (
 
 func (c *Checker) Check(ctx context.Context) {
 	log.Printf("%+v", c)
+	c.status = DOWN
 	var proxy = http.ProxyFromEnvironment
 	if strings.TrimSpace(c.Proxy) != "" {
 		parse, err := url.Parse(c.Proxy)
