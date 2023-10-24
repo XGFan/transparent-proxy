@@ -1,4 +1,5 @@
 .ipset {
+  margin-top: 10vw;
   width: 60vw;
   margin-left: 20vw;
 }
@@ -8,6 +9,7 @@
   width: 100%;
   min-height: 2rem;
 }
+
 .operation button {
   float: right;
   height: 1.5rem;

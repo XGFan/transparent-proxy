@@ -1,0 +1,18 @@
+chain v2ray {
+    mark 0xff return
+    ip daddr @reserved_ip return
+    meta l4proto {tcp, udp} ip saddr @proxy_src mark set 1 tproxy ip to 127.0.0.1:1082 accept
+    ip saddr @direct_src return
+    meta l4proto {tcp, udp} ip daddr @proxy_dst mark set 1 tproxy ip to 127.0.0.1:1082 accept
+    ip daddr @direct_dst return
+    ip daddr @chnroute return
+    meta l4proto {tcp, udp} mark set 1 tproxy ip to 127.0.0.1:1081 accept
+}
+
+chain v2ray_mask {
+    mark 0xff return
+    oifname "lo" return
+    ip daddr @reserved_ip return
+    ip daddr @chnroute return
+    meta l4proto {tcp, udp} mark set 1 accept
+}

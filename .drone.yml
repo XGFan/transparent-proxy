@@ -10,21 +10,22 @@ steps:
       - npm --registry=https://registry.npm.taobao.org install
       - npm run build
   - name: build
-    image: golang:1.18
+    image: golang:1.20
     environment:
       GOPROXY: https://registry.test4x.com/repository/go-proxy/
       CGO_ENABLED: 0
       GOOS: linux
       GOARCH: amd64
     commands:
-      - mv proxy-portal/build watchdog/web
-      - cd watchdog
-      - go build -o watchdog-bin
-      - cp watchdog-bin ../
+      - rm -rf guard/web
+      - mv proxy-portal/build guard/web
+      - cd guard
+      - go build -o guard-bin
+      - cp guard-bin ../
   - name: upx
     image: hairyhenderson/upx:3.96
     commands:
-      - upx watchdog-bin
+      - upx guard-bin
   - name: scp files
     image: appleboy/drone-scp
     settings:
@@ -35,7 +36,7 @@ steps:
       key:
         from_secret: ssh_key
       port: 22
-      source: watchdog-bin
+      source: guard-bin
       target: ~/
   - name: ssh deploy
     image: appleboy/drone-ssh
@@ -48,8 +49,8 @@ steps:
         from_secret: ssh_key
       port: 22
       script:
-        - mv ~/watchdog-bin /etc/transparent-proxy/watchdog
-        - /etc/init.d/transparent-proxy-watchdog restart
+        - mv ~/guard-bin /etc/transparent-proxy/guard
+        - /etc/init.d/transparent-proxy restart
   - name: notification
     when:
       status:

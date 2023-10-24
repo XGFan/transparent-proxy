@@ -1,0 +1,29 @@
+### get all set
+GET http://192.168.2.1:1444/api/status
+
+### add to set
+POST http://192.168.2.1:1444/api/add
+Content-Type: application/json
+
+{
+  "ip": "1.2.3.4",
+  "set": "proxy_src"
+}
+
+### add to set 2
+POST http://192.168.2.1:1444/api/add
+Content-Type: application/json
+
+{
+  "ip": "1.2.3.34-1.2.3.56",
+  "set": "direct_src"
+}
+
+### delete from set
+DELETE http://192.168.2.1:1444/api/remove
+Content-Type: application/json
+
+{
+  "ip": "1.2.3.4/31",
+  "set": "direct_src"
+}

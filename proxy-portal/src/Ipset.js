@@ -15,22 +15,18 @@ function Ipset() {
   }, [setIpsets])
   let removeIp = function (set, ip) {
     console.log("delete", ip, "from", set)
-    axios.delete("/api/remove", {
-      data: {
-        ip: ip,
-        set: set
-      }
+    axios.post("/api/remove", {
+      ip: ip,
+      set: set
     })
       .then(r => axios.get("/api/status"))
       .then(r => setIpsets(r.data.sets))
   }
   let addIp = function (set, ip) {
     console.log("add", ip, "to", set)
-    axios.delete("/api/add", {
-      data: {
-        ip: ip,
-        set: set
-      }
+    axios.post("/api/add", {
+      ip: ip,
+      set: set
     })
       .then(r => axios.get("/api/status"))
       .then(r => setIpsets(r.data.sets))
@@ -48,8 +44,8 @@ function Ipset() {
       })
   }
   let cards = ipsets.map(it => {
-    return (<div className="card" key={it.Name}>
-      <header className="fix-header">{it.Name}</header>
+    return (<div className="card" key={it.name}>
+      <header className="fix-header">{it.name}</header>
       <div className="content">
         <table>
           <tbody>
@@ -61,25 +57,17 @@ function Ipset() {
           {/*  <td>Header</td>*/}
           {/*  <td>{it.Header}</td>*/}
           {/*</tr>*/}
-          <tr>
-            <td>References</td>
-            <td>{it.References}</td>
-          </tr>
-          <tr>
-            <td>Size In Memory</td>
-            <td>{it.SizeInMemory}</td>
-          </tr>
           </tbody>
         </table>
         <div className="ips">
           {
-            (it.Entries ?? []).map(e => (<span key={e} onClick={function (event) {
-              removeIp(it.Name, e)
+            (it.ip ?? []).map(e => (<span key={e} onClick={function (event) {
+              removeIp(it.name, e)
             }}>{e}</span>))
           }
           <span><input onKeyDown={function (event) {
             if (event.key === 'Enter') {
-              addIp(it.Name, event.target.value)
+              addIp(it.name, event.target.value)
               event.target.value = ''
             }
           }}/></span>

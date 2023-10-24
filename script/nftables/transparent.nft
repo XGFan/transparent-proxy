@@ -1,0 +1,8 @@
+chain mangle_prerouting {
+    iifname "br-lan" jump v2ray
+    mark 0x1 jump v2ray
+}
+
+chain mangle_output {
+    jump v2ray_mask
+}
