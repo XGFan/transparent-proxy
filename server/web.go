@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/XGFan/go-utils"
+	"github.com/XGFan/netguard"
 	"github.com/gonetx/ipset"
 	"github.com/spyzhov/ajson"
+	"gopkg.in/yaml.v3"
 	"io"
 	"io/fs"
 	"log"
@@ -82,36 +86,6 @@ func removeFromSet(setName, data string) error {
 	output, err := command.CombinedOutput()
 	log.Printf("exec [%s] result: %s", command, output)
 	return err
-}
-
-func status(res http.ResponseWriter, req *http.Request) {
-	directSrcList := getSetJson("direct_src")
-	directDstList := getSetJson("direct_dst")
-	proxySrcList := getSetJson("proxy_src")
-	proxyDstList := getSetJson("proxy_dst")
-	res.Header().Set("Content-Type", "application/json")
-	ip := currentIP(req)
-	_ = json.NewEncoder(res).Encode(map[string]interface{}{
-		"ip": ip,
-		"sets": []map[string]interface{}{
-			map[string]interface{}{
-				"name": "direct_src",
-				"ip":   directSrcList,
-			},
-			map[string]interface{}{
-				"name": "direct_dst",
-				"ip":   directDstList,
-			},
-			map[string]interface{}{
-				"name": "proxy_src",
-				"ip":   proxySrcList,
-			},
-			map[string]interface{}{
-				"name": "proxy_dst",
-				"ip":   proxyDstList,
-			},
-		},
-	})
 }
 
 func currentIP(req *http.Request) string {
@@ -230,10 +204,51 @@ func (f FsAdapter) Open(name string) (fs.File, error) {
 func main() {
 	configFile := flag.String("c", "config.yaml", "config location")
 	flag.Parse()
-	go Guard(*configFile)
+	open, err := utils.LocateAndRead(*configFile)
+	if err != nil {
+		log.Printf("[exit]read config error: %s", err)
+		return
+	}
+	checkerConf := new(netguard.CheckerConf)
+	err = yaml.Unmarshal(open, checkerConf)
+	if err != nil {
+		log.Printf("[exit]parse config error: %s", err)
+		return
+	}
+	checker := netguard.AssembleChecker(*checkerConf)
+	go checker.Check(context.Background())
 	serverFs := http.FileServer(http.FS(FsAdapter{assetData}))
 	http.Handle("/", serverFs)
-	http.HandleFunc("/api/status", status)
+	http.HandleFunc("/api/status", func(res http.ResponseWriter, req *http.Request) {
+		directSrcList := getSetJson("direct_src")
+		directDstList := getSetJson("direct_dst")
+		proxySrcList := getSetJson("proxy_src")
+		proxyDstList := getSetJson("proxy_dst")
+		res.Header().Set("Content-Type", "application/json")
+		ip := currentIP(req)
+		_ = json.NewEncoder(res).Encode(map[string]interface{}{
+			"status": checker.Status(),
+			"ip":     ip,
+			"sets": []map[string]interface{}{
+				{
+					"name": "direct_src",
+					"ip":   directSrcList,
+				},
+				{
+					"name": "direct_dst",
+					"ip":   directDstList,
+				},
+				{
+					"name": "proxy_src",
+					"ip":   proxySrcList,
+				},
+				{
+					"name": "proxy_dst",
+					"ip":   proxyDstList,
+				},
+			},
+		})
+	})
 	http.HandleFunc("/api/refresh-route", func(writer http.ResponseWriter, request *http.Request) {
 		err := refreshCHNRoute()
 		if err != nil {

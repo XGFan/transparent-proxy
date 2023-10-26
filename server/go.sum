@@ -1,5 +1,7 @@
 github.com/XGFan/go-utils v0.0.0-20231021141824-6461e363d309 h1:oNyewwRqaQzgwNdrLBAg5TaKt86WEE5OIFkIjLlQCec=
 github.com/XGFan/go-utils v0.0.0-20231021141824-6461e363d309/go.mod h1:hRhnBAxtHS7EDyBc0zLywkLoBp0U4zAFqVVlAmqDofQ=
+github.com/XGFan/netguard v0.0.0-20231026133058-f0a6a7202e73 h1:TEFyP3MlWx8xvVcuf5FUVEnByJCSjW8ldBHAdtVoPeQ=
+github.com/XGFan/netguard v0.0.0-20231026133058-f0a6a7202e73/go.mod h1:FK+ziOoFmGwI1FOLMCQw8jW/pvYs/HBgcXEQ9zSE6Gs=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
