@@ -6,7 +6,7 @@ steps:
   - name: build-web
     image: node:lts-alpine
     commands:
-      - cd proxy-portal
+      - cd portal
       - npm --registry=https://registry.npm.taobao.org install
       - npm run build
   - name: build
@@ -18,7 +18,7 @@ steps:
       GOARCH: amd64
     commands:
       - rm -rf guard/web
-      - mv proxy-portal/build guard/web
+      - mv portal/build guard/web
       - cd guard
       - go build -o guard-bin
       - cp guard-bin ../
