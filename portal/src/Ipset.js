@@ -6,12 +6,15 @@ import {useEffect, useState} from "react";
 function Ipset() {
   let [ipsets, setIpsets] = useState([]);
   let [ip, setIp] = useState('');
+  let [status, setStatus] = useState(0);
   let [freshClickable, setFreshClickable] = useState(true);
+  let updateOverall = r => {
+    setIpsets(r.data.sets)
+    setIp(r.data.ip)
+    setStatus(r.data.status)
+  };
   useEffect(() => {
-    axios.get("/api/status").then(r => {
-      setIpsets(r.data.sets)
-      setIp(r.data.ip)
-    })
+    axios.get("/api/status").then(updateOverall)
   }, [setIpsets])
   let removeIp = function (set, ip) {
     console.log("delete", ip, "from", set)
@@ -20,7 +23,7 @@ function Ipset() {
       set: set
     })
       .then(r => axios.get("/api/status"))
-      .then(r => setIpsets(r.data.sets))
+      .then(updateOverall)
   }
   let addIp = function (set, ip) {
     console.log("add", ip, "to", set)
@@ -29,7 +32,7 @@ function Ipset() {
       set: set
     })
       .then(r => axios.get("/api/status"))
-      .then(r => setIpsets(r.data.sets))
+      .then(updateOverall)
   }
   let refreshCHN = function () {
     setFreshClickable(false)
@@ -78,7 +81,11 @@ function Ipset() {
   return (
     <div className="ipset">
       <div className="operation">
-        <span>Your IP: <b>{ip}</b></span>
+        <div>
+          <span>Transparent: <b>{status === 0 ? 'Disabled' : 'Enabled'}</b></span>
+          <br/>
+          <span>Your IP: <b>{ip}</b></span>
+        </div>
         <button disabled={!freshClickable} onClick={refreshCHN}>Update CHNRoute</button>
       </div>
       <div className="container">

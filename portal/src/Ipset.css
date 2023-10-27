@@ -1,19 +1,22 @@
-.ipset {
-  margin-top: 10vw;
-  width: 60vw;
-  margin-left: 20vw;
-}
 
 .operation {
-  display: block;
+  /*display: block;*/
   width: 100%;
   min-height: 2rem;
 }
 
+.operation div {
+  display: inline-block;
+}
+
 .operation button {
   float: right;
-  height: 1.5rem;
+  height: 2rem;
 }
+
+/*.operation span {*/
+/*  margin-right: 2rem;*/
+/*}*/
 
 .container {
   display: grid;
@@ -22,14 +25,28 @@
 }
 
 @media only screen and (max-width: 1400px) {
+  .ipset {
+    margin-top: 10vw;
+    width: 60vw;
+    margin-left: 20vw;
+  }
+
   .container {
     grid-template-columns: 1fr 1fr;
+    width: 60vw;
   }
 }
 
 @media only screen and (max-width: 900px) {
+  .ipset {
+    margin-top: 10vw;
+    width: 80vw;
+    margin-left: 10vw;
+  }
+
   .container {
     grid-template-columns: 1fr;
+    width: 80vw;
   }
 }
 
