@@ -14,28 +14,25 @@
   height: 2rem;
 }
 
-/*.operation span {*/
-/*  margin-right: 2rem;*/
-/*}*/
-
 .container {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
   grid-gap: 1rem;
 }
 
-@media only screen and (max-width: 1400px) {
-  .ipset {
-    margin-top: 10vw;
-    width: 60vw;
-    margin-left: 20vw;
-  }
+.ipset {
+  margin-top: 10vw;
+  width: 60vw;
+  margin-left: 20vw;
+}
 
+@media only screen and (max-width: 1400px) {
   .container {
     grid-template-columns: 1fr 1fr;
     width: 60vw;
   }
 }
+
 
 @media only screen and (max-width: 900px) {
   .ipset {
