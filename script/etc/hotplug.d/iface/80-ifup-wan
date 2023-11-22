@@ -1,0 +1,12 @@
+#!/bin/sh
+[ "$ACTION" = "ifup" -a "$INTERFACE" = "wan" ] && {
+    logger "iface wan up detected, add route table"
+    ip rule add fwmark 1 table 100
+    ip route add local 0.0.0.0/0 dev lo table 100
+}
+[ "$ACTION" = "ifdown" -a "$INTERFACE" = "wan" ] && {
+    logger "iface wan down detected, clear route table"
+    ip rule del fwmark 1 table 100
+    ip route del local 0.0.0.0/0 dev lo table 100
+}
+exit 0
