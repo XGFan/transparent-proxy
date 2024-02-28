@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"github.com/XGFan/go-utils"
 	"github.com/XGFan/netguard"
+	"github.com/gin-contrib/static"
+	"github.com/gin-gonic/gin"
 	"github.com/gonetx/ipset"
 	"github.com/spyzhov/ajson"
 	"gopkg.in/yaml.v3"
 	"io"
-	"io/fs"
 	"log"
 	"math"
 	"net"
@@ -27,6 +28,7 @@ import (
 var assetData embed.FS
 
 const BasePath = "/etc/transparent-proxy"
+const V2ConfPath = "/etc/v2/v2ray.v5.json"
 
 func getSetJson(setName string) []string {
 	command := exec.Command("nft", "-j", "list", "set", "inet", "fw4", setName)
@@ -94,14 +96,6 @@ func currentIP(req *http.Request) string {
 		ip, _, _ = net.SplitHostPort(req.RemoteAddr)
 	}
 	return ip
-}
-
-func handleError(res http.ResponseWriter, e error) {
-	if e != nil {
-		res.WriteHeader(500)
-		res.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(res).Encode(e.Error())
-	}
 }
 
 type IpAndSet struct {
@@ -190,43 +184,40 @@ func refreshCHNRoute() error {
 	return nil
 }
 
-type FsAdapter struct {
-	forward embed.FS
-}
-
-func (f FsAdapter) Open(name string) (fs.File, error) {
-	if name == "." {
-		return f.forward.Open("web")
-	}
-	return f.forward.Open("web/" + name)
+func restartV2() error {
+	command := exec.Command("/etc/init.d/v2", "restart")
+	output, err := command.CombinedOutput()
+	log.Printf("exec [%s] result: %s", command, output)
+	return err
 }
 
 func main() {
 	configFile := flag.String("c", "config.yaml", "config location")
 	flag.Parse()
 	open, err := utils.LocateAndRead(*configFile)
+	var checker netguard.Checker
 	if err != nil {
 		log.Printf("[exit]read config error: %s", err)
-		return
+		checkerConf := new(netguard.CheckerConf)
+		err = yaml.Unmarshal(open, checkerConf)
+		if err != nil {
+			log.Printf("[exit]parse config error: %s", err)
+			return
+		}
+		checker = netguard.AssembleChecker(*checkerConf)
+		go checker.Check(context.Background())
 	}
-	checkerConf := new(netguard.CheckerConf)
-	err = yaml.Unmarshal(open, checkerConf)
-	if err != nil {
-		log.Printf("[exit]parse config error: %s", err)
-		return
-	}
-	checker := netguard.AssembleChecker(*checkerConf)
-	go checker.Check(context.Background())
-	serverFs := http.FileServer(http.FS(FsAdapter{assetData}))
-	http.Handle("/", serverFs)
-	http.HandleFunc("/api/status", func(res http.ResponseWriter, req *http.Request) {
+
+	r := gin.Default()
+	r.Use(static.Serve("/", static.EmbedFolder(assetData, "web")))
+
+	r.GET("/api/status", func(c *gin.Context) {
 		directSrcList := getSetJson("direct_src")
 		directDstList := getSetJson("direct_dst")
 		proxySrcList := getSetJson("proxy_src")
 		proxyDstList := getSetJson("proxy_dst")
-		res.Header().Set("Content-Type", "application/json")
-		ip := currentIP(req)
-		_ = json.NewEncoder(res).Encode(map[string]interface{}{
+		ip := currentIP(c.Request)
+		c.JSON(200, map[string]interface{}{
 			"status": checker.Status(),
 			"ip":     ip,
 			"sets": []map[string]interface{}{
@@ -249,39 +240,57 @@ func main() {
 			},
 		})
 	})
-	http.HandleFunc("/api/refresh-route", func(writer http.ResponseWriter, request *http.Request) {
+
+	r.POST("/api/refresh-route", func(c *gin.Context) {
 		err := refreshCHNRoute()
-		if err != nil {
-			handleError(writer, err)
-		} else {
-			_, _ = writer.Write([]byte("ok"))
-		}
+		utils.PanicIfErr(err)
+		c.JSON(200, "ok")
 	})
-	http.HandleFunc("/api/remove", func(writer http.ResponseWriter, req *http.Request) {
+
+	r.POST("/api/remove", func(c *gin.Context) {
 		ipAndSet := new(IpAndSet)
-		err := json.NewDecoder(req.Body).Decode(ipAndSet)
-		if err == nil {
-			if ipAndSet.isValid() {
-				err = removeFromSet(ipAndSet.Set, ipAndSet.IP)
-			}
+		err := json.NewDecoder(c.Request.Body).Decode(ipAndSet)
+		utils.PanicIfErr(err)
+		if ipAndSet.isValid() {
+			err = removeFromSet(ipAndSet.Set, ipAndSet.IP)
+			utils.PanicIfErr(err)
 		}
-		handleError(writer, err)
 	})
 
-	http.HandleFunc("/api/add", func(writer http.ResponseWriter, req *http.Request) {
-		ipAndSet := new(IpAndSet)
-		err := json.NewDecoder(req.Body).Decode(ipAndSet)
-		if err == nil {
-			if ipAndSet.isValid() {
-				err = addToSet(ipAndSet.Set, ipAndSet.IP)
-			}
-		}
-		handleError(writer, err)
+	r.GET("/api/ip", func(c *gin.Context) {
+		c.JSON(200, currentIP(c.Request))
 	})
 
-	http.HandleFunc("/api/ip", func(writer http.ResponseWriter, request *http.Request) {
-		_, _ = writer.Write([]byte(currentIP(request)))
+	r.GET("/api/v2-conf", func(c *gin.Context) {
+		file, err := os.ReadFile(V2ConfPath)
+		utils.PanicIfErr(err)
+		root, err := ajson.Unmarshal(file)
+		utils.PanicIfErr(err)
+		result, err := root.JSONPath("$.outbounds[0]")
+		utils.PanicIfErr(err)
+		c.Data(200, "application/json", result[0].Source())
 	})
 
-	log.Fatalln(http.ListenAndServe(":1444", nil))
+	r.POST("/api/v2-conf", func(c *gin.Context) {
+		data, err := c.GetRawData()
+		utils.PanicIfErr(err)
+		file, err := os.ReadFile(V2ConfPath)
+		utils.PanicIfErr(err)
+		root, err := ajson.Unmarshal(file)
+		utils.PanicIfErr(err)
+		result, err := root.JSONPath("$.outbounds[0]")
+		utils.PanicIfErr(err)
+		unmarshal, err := ajson.Unmarshal(data)
+		err = result[0].SetObject(unmarshal.MustObject())
+		utils.PanicIfErr(err)
+		marshal, err := ajson.Marshal(root)
+		utils.PanicIfErr(err)
+		err = os.WriteFile(V2ConfPath, marshal, 0666)
+		utils.PanicIfErr(err)
+		err = restartV2()
+		utils.PanicIfErr(err)
+	})
+
+	err = r.Run(":1444")
+	utils.PanicIfErr(err)
 }

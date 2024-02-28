@@ -27,3 +27,34 @@ Content-Type: application/json
   "ip": "1.2.3.4/31",
   "set": "direct_src"
 }
+
+### get v2 config
+GET http://192.168.2.1:1333/api/v2-conf
+
+
+### set v2 config
+POST http://192.168.2.1:1333/api/v2-conf
+Content-Type: application/json
+
+{
+  "protocol": "trojan",
+  "settings": {
+    "address": "43.207.107.0",
+    "port": 30056,
+    "password": "8969ec32-22c6-496f-9455-1c2f32b0fd2b"
+  },
+  "streamSettings": {
+    "security": "tls",
+    "securitySettings": {
+      "serverName": "cdn.test4x.com"
+    },
+    "socketSettings": {
+      "mark": 255,
+      "tcpFastOpen": true
+    }
+  },
+  "tag": "proxy"
+}
+
+### get readme
+GET http://192.168.2.1:1333/README
