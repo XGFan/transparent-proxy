@@ -71,10 +71,6 @@ function Ipset() {
   }
 
   let handleChange = function (event) {
-    var number = event.target.value.search("\n");
-    var count = (event.target.value.split('\n') || []).length;
-    console.log(count)
-    // console.log(event.target.value)
     setV2ConfStr(event.target.value);
   }
 
