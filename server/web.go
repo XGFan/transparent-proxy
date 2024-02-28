@@ -196,16 +196,17 @@ func main() {
 	flag.Parse()
 	open, err := utils.LocateAndRead(*configFile)
 	var checker netguard.Checker
-	if err != nil {
-		log.Printf("[exit]read config error: %s", err)
+	if err == nil {
 		checkerConf := new(netguard.CheckerConf)
 		err = yaml.Unmarshal(open, checkerConf)
-		if err != nil {
-			log.Printf("[exit]parse config error: %s", err)
-			return
+		if err == nil {
+			checker = netguard.AssembleChecker(*checkerConf)
+			go checker.Check(context.Background())
+		} else {
+			log.Printf("parse guard config error: %s", err)
 		}
-		checker = netguard.AssembleChecker(*checkerConf)
-		go checker.Check(context.Background())
+	} else {
+		log.Printf("start without guard: %s", err)
 	}
 
 	r := gin.Default()
