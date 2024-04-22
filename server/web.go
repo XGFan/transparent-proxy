@@ -258,6 +258,16 @@ func main() {
 		}
 	})
 
+	r.POST("/api/add", func(c *gin.Context) {
+		ipAndSet := new(IpAndSet)
+		err := json.NewDecoder(c.Request.Body).Decode(ipAndSet)
+		utils.PanicIfErr(err)
+		if ipAndSet.isValid() {
+			err = addToSet(ipAndSet.Set, ipAndSet.IP)
+			utils.PanicIfErr(err)
+		}
+	})
+
 	r.GET("/api/ip", func(c *gin.Context) {
 		c.JSON(200, currentIP(c.Request))
 	})
