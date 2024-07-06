@@ -10,7 +10,7 @@ steps:
       - npm install
       - npm run build
   - name: build
-    image: golang:1.21
+    image: golang:1.22
     environment:
       GOPROXY: https://registry.test4x.com/repository/go-proxy/
       CGO_ENABLED: 0
