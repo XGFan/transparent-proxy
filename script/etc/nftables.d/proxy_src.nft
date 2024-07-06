@@ -1,0 +1,6 @@
+set proxy_src {
+    type ipv4_addr
+    flags interval
+    auto-merge
+    elements = { 192.168.2.65 }
+}
