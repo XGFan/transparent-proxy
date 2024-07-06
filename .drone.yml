@@ -15,7 +15,7 @@ steps:
       GOPROXY: https://registry.test4x.com/repository/go-proxy/
       CGO_ENABLED: 0
       GOOS: linux
-      GOARCH: amd64
+      GOARCH: arm64
     commands:
       - rm -rf server/web
       - mv portal/build server/web
@@ -49,7 +49,7 @@ steps:
         from_secret: ssh_key
       port: 22
       script:
-        - mv ~/server-bin /etc/transparent-proxy/server
+        - mv ~/server-bin /etc/transparent-proxy/guard
         - /etc/init.d/transparent-proxy restart
   - name: notification
     when:

@@ -1,0 +1,12 @@
+set {{ .Name }} {
+    type ipv4_addr
+    flags interval
+    auto-merge
+    {{range .Attrs}}{{.}}
+    {{end}}
+    {{ if and .Elements (gt (len .Elements) 0) }}
+    elements = {
+        {{ join  "," .Elements }}
+    }
+    {{end}}
+}

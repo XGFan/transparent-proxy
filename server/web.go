@@ -10,7 +10,6 @@ import (
 	"github.com/XGFan/netguard"
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
-	"github.com/gonetx/ipset"
 	"github.com/spyzhov/ajson"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -20,15 +19,20 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
+	"text/template"
 )
 
 //go:embed web
 var assetData embed.FS
 
-const BasePath = "/etc/transparent-proxy"
-const V2ConfPath = "/etc/v2/v2ray.v5.json"
+//go:embed set.tmpl
+var setTmpl string
+
+const BasePath = "/etc/nftables.d"
+const V2ConfPath = "/etc/v2ray/v2ray.v5.json"
 
 func getSetJson(setName string) []string {
 	command := exec.Command("nft", "-j", "list", "set", "inet", "fw4", setName)
@@ -140,58 +144,43 @@ func getCHNRoute() ([]string, error) {
 	return ipRanges, nil
 }
 
-func refreshCHNRoute() error {
-	_, err := ipset.New("chnroute",
-		ipset.HashNet,
-		ipset.HashSize(2048),
-		ipset.Family(ipset.Inet),
-		ipset.MaxElem(65536),
-		ipset.Exist(true))
-	if err != nil {
-		return fmt.Errorf("create or read ipset [chnroute] fail: %w", err)
-	}
-	chnrouteForUpdate, err := ipset.New("chnroute-for-update",
-		ipset.HashNet,
-		ipset.HashSize(2048),
-		ipset.Family(ipset.Inet),
-		ipset.MaxElem(65536),
-		ipset.Exist(true))
-	if err != nil {
-		return fmt.Errorf("create or read ipset [chnroute-for-update] fail: %w", err)
-	}
-	routes, err := getCHNRoute()
-	if err != nil {
-		return err
-	}
-	err = chnrouteForUpdate.Flush()
-	if err != nil {
-		return fmt.Errorf("flush ipset [chnroute-for-update] fail: %w", err)
-	}
-	for _, route := range routes {
-		err := chnrouteForUpdate.Add(route, ipset.Exist(true))
-		if err != nil {
-			return fmt.Errorf("add %s to ipset [chnroute-for-update] fail: %w", route, err)
-		}
-	}
-	err = ipset.Swap("chnroute-for-update", "chnroute")
-	if err != nil {
-		return fmt.Errorf("swap ipsets fail: %w", err)
-	}
-	err = os.WriteFile(fmt.Sprintf("%s/%s", BasePath, "chnroute.txt"), []byte(strings.Join(routes, "\n")), 0644)
-	if err != nil {
-		return fmt.Errorf("save route to chnroute.txt: %w", err)
-	}
-	return nil
-}
-
 func restartV2() error {
-	command := exec.Command("/etc/init.d/v2", "restart")
+	command := exec.Command("/etc/init.d/v2ray", "restart")
 	output, err := command.CombinedOutput()
 	log.Printf("exec [%s] result: %s", command, output)
 	return err
 }
+func join(sep string, s []string) string {
+	return strings.Join(s, sep)
+}
+
+type NftSet struct {
+	Name     string
+	Attrs    []string
+	Elements []string
+}
 
 func main() {
+	tmpl, err2 := template.New("set").Funcs(template.FuncMap{"join": join}).Parse(setTmpl)
+	if err2 != nil {
+		log.Fatalln(err2)
+	}
+
+	//strings.Join()
+	log.Printf("%+v", tmpl)
+
+	if err2 != nil {
+		log.Fatalln(err2)
+	}
+
+	//tmpl, err := template.New("test").Parse("{{.Count}} items are made of {{.Material}}")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//err = tmpl.Execute(os.Stdout, sweaters)
+	//if err != nil {
+	//	panic(err)
+	//}
 	configFile := flag.String("c", "config.yaml", "config location")
 	flag.Parse()
 	open, err := utils.LocateAndRead(*configFile)
@@ -243,8 +232,8 @@ func main() {
 	})
 
 	r.POST("/api/refresh-route", func(c *gin.Context) {
-		err := refreshCHNRoute()
-		utils.PanicIfErr(err)
+		//err := refreshCHNRoute()
+		//utils.PanicIfErr(err)
 		c.JSON(200, "ok")
 	})
 
@@ -266,6 +255,27 @@ func main() {
 			err = addToSet(ipAndSet.Set, ipAndSet.IP)
 			utils.PanicIfErr(err)
 		}
+	})
+
+	r.POST("/api/sync", func(c *gin.Context) {
+		sets := []string{"direct_src", "direct_dst", "proxy_src", "proxy_dst"}
+		for _, setName := range sets {
+			file, err := os.OpenFile(path.Join(BasePath, setName), os.O_RDWR|os.O_CREATE, 0664)
+			if err != nil {
+				c.Error(err)
+				return
+			}
+			err = tmpl.Execute(file, NftSet{
+				Name:     setName,
+				Elements: getSetJson(setName),
+			})
+			_ = file.Close()
+			if err != nil {
+				c.Error(err)
+				return
+			}
+		}
+
 	})
 
 	r.GET("/api/ip", func(c *gin.Context) {
