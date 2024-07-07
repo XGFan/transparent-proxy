@@ -54,6 +54,16 @@ function Ipset() {
         setFreshClickable(true)
       })
   }
+  let syncNFT = function () {
+    axios.post("/api/sync")
+        .then(r => {
+          if (r.status === 200) {
+            alert("Sync Success")
+          }
+        })
+        .finally(() => {
+        })
+  }
   let applyV2 = function (e) {
     try {
       // 尝试解析 JSON 字符串并重新格式化
@@ -103,6 +113,7 @@ function Ipset() {
           <span>Your IP: <b>{ip}</b></span>
         </div>
         <button disabled={!freshClickable} onClick={refreshCHN}>Update CHNRoute</button>
+        <button onClick={syncNFT}>Sync</button>
       </div>
       <div className="container">
         {cards}
