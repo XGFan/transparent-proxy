@@ -44,7 +44,7 @@ function Ipset() {
   }
   let refreshCHN = function () {
     setFreshClickable(false)
-    axios.get("/api/refresh-route")
+    axios.post("/api/refresh-route")
       .then(r => {
         if (r.status === 200) {
           alert("Refresh Success")
