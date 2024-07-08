@@ -165,22 +165,6 @@ func main() {
 	if err2 != nil {
 		log.Fatalln(err2)
 	}
-
-	//strings.Join()
-	log.Printf("%+v", tmpl)
-
-	if err2 != nil {
-		log.Fatalln(err2)
-	}
-
-	//tmpl, err := template.New("test").Parse("{{.Count}} items are made of {{.Material}}")
-	//if err != nil {
-	//	panic(err)
-	//}
-	//err = tmpl.Execute(os.Stdout, sweaters)
-	//if err != nil {
-	//	panic(err)
-	//}
 	configFile := flag.String("c", "config.yaml", "config location")
 	flag.Parse()
 	open, err := utils.LocateAndRead(*configFile)
@@ -232,8 +216,18 @@ func main() {
 	})
 
 	r.POST("/api/refresh-route", func(c *gin.Context) {
-		//err := refreshCHNRoute()
-		//utils.PanicIfErr(err)
+		ips, err := getCHNRoute()
+		utils.PanicIfErr(err)
+		file, err := os.OpenFile(path.Join(BasePath, fmt.Sprintf("chnroute.nft")), os.O_RDWR|os.O_CREATE, 0664)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+		err = tmpl.Execute(file, NftSet{
+			Name:     "chnroute",
+			Elements: ips,
+		})
+		_ = file.Close()
 		c.JSON(200, "ok")
 	})
 
