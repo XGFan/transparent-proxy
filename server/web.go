@@ -254,7 +254,7 @@ func main() {
 	r.POST("/api/sync", func(c *gin.Context) {
 		sets := []string{"direct_src", "direct_dst", "proxy_src", "proxy_dst"}
 		for _, setName := range sets {
-			file, err := os.OpenFile(path.Join(BasePath, fmt.Sprintf("%s.nft", setName)), os.O_RDWR|os.O_CREATE, 0664)
+			file, err := os.OpenFile(path.Join(BasePath, fmt.Sprintf("%s.nft", setName)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
 			if err != nil {
 				c.Error(err)
 				return
