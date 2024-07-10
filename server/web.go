@@ -218,7 +218,7 @@ func main() {
 	r.POST("/api/refresh-route", func(c *gin.Context) {
 		ips, err := getCHNRoute()
 		utils.PanicIfErr(err)
-		file, err := os.OpenFile(path.Join(BasePath, fmt.Sprintf("chnroute.nft")), os.O_RDWR|os.O_CREATE, 0664)
+		file, err := os.OpenFile(path.Join(BasePath, fmt.Sprintf("chnroute.nft")), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
 		if err != nil {
 			c.Error(err)
 			return
