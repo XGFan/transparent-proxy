@@ -13,6 +13,7 @@ chain v2ray_mask {
     mark 0xff return
     oifname "lo" return
     ip daddr @reserved_ip return
+    ip daddr @direct_dst return
     ip daddr @chnroute return
     meta l4proto {tcp, udp} mark set 1 accept
 }
