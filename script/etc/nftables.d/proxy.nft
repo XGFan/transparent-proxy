@@ -15,5 +15,6 @@ chain v2ray_mask {
     ip daddr @reserved_ip return
     ip daddr @direct_dst return
     ip daddr @chnroute return
+    # mark set 1 会重新进入prerouting v2ray
     meta l4proto {tcp, udp} mark set 1 accept
 }
