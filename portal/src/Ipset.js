@@ -6,7 +6,6 @@ import {useEffect, useState} from "react";
 function Ipset() {
   let [ipsets, setIpsets] = useState([]);
   let [ip, setIp] = useState('');
-  let [v2ConfStr, setV2ConfStr] = useState('');
   let [status, setStatus] = useState(0);
   let [freshClickable, setFreshClickable] = useState(true);
   let updateOverall = r => {
@@ -14,13 +13,7 @@ function Ipset() {
     setIp(r.data.ip)
     setStatus(r.data.status)
   };
-  const getV2 = () => {
-    axios.get("/api/v2-conf")
-      .then(r => {
-        setV2ConfStr(JSON.stringify(r.data, null, 4))
-      })
-  }
-  useEffect(getV2, []);
+
   useEffect(() => {
     axios.get("/api/status").then(updateOverall)
   }, [setIpsets])
@@ -64,25 +57,6 @@ function Ipset() {
         .finally(() => {
         })
   }
-  let applyV2 = function (e) {
-    try {
-      // 尝试解析 JSON 字符串并重新格式化
-      const json = JSON.parse(v2ConfStr);
-      // setJsonString(JSON.stringify(json, null, 2));
-      axios.post("/api/v2-conf", json, {})
-        .then(value => {
-          console.log(value)
-        })
-        .then(value => getV2())
-    } catch (error) {
-      // 如果 JSON 无效，可以在这里处理错误
-      console.error("Invalid JSON:", v2ConfStr);
-    }
-  }
-
-  let handleChange = function (event) {
-    setV2ConfStr(event.target.value);
-  }
 
   let cards = ipsets.map(it => {
     return (<div className="card" key={it.name}>
@@ -90,7 +64,7 @@ function Ipset() {
       <div className="content">
         <div className="ips">
           {
-            (it.ip ?? []).map(e => (<span key={e} onClick={function (event) {
+            (it.elems ?? []).map(e => (<span key={e} onClick={function (event) {
               removeIp(it.name, e)
             }}>{e}</span>))
           }
@@ -117,19 +91,6 @@ function Ipset() {
       </div>
       <div className="container">
         {cards}
-      </div>
-      <div style={{marginTop: '1rem'}}>
-        <div className="card">
-          <header className="fix-header">v2ray config</header>
-          <div className="content">
-            <textarea style={{backgroundColor: '#eeeeee', width: '100%', height: '24rem'}}
-                      value={v2ConfStr}
-                      onChange={handleChange}/>
-            <div style={{height: '1.5rem'}}>
-              <button style={{float: 'right', height: '1.5rem'}} onClick={applyV2}>Apply</button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
