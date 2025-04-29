@@ -49,7 +49,7 @@ steps:
         from_secret: ssh_key
       port: 22
       script:
-        - mv ~/server-bin /etc/transparent-proxy/guard
+        - mv ~/server-bin /mnt/ext/app/transparent-proxy/guard
         - /etc/init.d/transparent-proxy restart
   - name: notification
     when:
