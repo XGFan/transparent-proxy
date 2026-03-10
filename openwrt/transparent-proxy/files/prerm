@@ -1,0 +1,20 @@
+#!/bin/sh
+
+set -eu
+
+[ -n "${IPKG_INSTROOT:-}" ] && exit 0
+
+action="${1:-}"
+guest_initd="/etc/init.d/transparent-proxy"
+
+if [ -x "${guest_initd}" ]; then
+  "${guest_initd}" stop >/dev/null 2>&1 || true
+
+  case "${action}" in
+    remove|purge|deconfigure)
+      "${guest_initd}" disable >/dev/null 2>&1 || true
+      ;;
+  esac
+fi
+
+exit 0

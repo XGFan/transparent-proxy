@@ -1,10 +1,12 @@
 const {createProxyMiddleware} = require('http-proxy-middleware');
 
+const API_TARGET = process.env.PORTAL_API_TARGET || 'http://127.0.0.1:1444/';
+
 module.exports = function (app) {
   app.use(
     '/api/',
     createProxyMiddleware({
-      target: 'http://192.168.2.1:1444/',
+      target: API_TARGET,
       // changeOrigin: true,
       // pathRewrite: {
       //   '^/api/': '/'

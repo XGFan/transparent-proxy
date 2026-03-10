@@ -3,3 +3,8 @@
 node_modules
 build
 watchdog/web
+
+# Build artifacts
+.tmp/
+portal/dist-node/
+portal/tsconfig.tsbuildinfo

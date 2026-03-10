@@ -1,5 +1,0 @@
-set proxy_dst {
-    type ipv4_addr
-    flags interval
-    auto-merge
-}

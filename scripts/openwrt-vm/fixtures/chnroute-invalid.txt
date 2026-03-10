@@ -1,0 +1,2 @@
+# invalid fixture to trigger parse failure contract
+apnic|CN|ipv4|1.0.9.0|not-a-number|20110414|allocated

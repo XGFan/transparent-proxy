@@ -3,54 +3,42 @@ name: default
 type: kubernetes
 
 steps:
-  - name: build-web
+  - name: portal-build
     image: node:lts-alpine
     commands:
       - cd portal
-      - npm install
+      - npm ci
       - npm run build
-  - name: build
+  - name: server-test
     image: golang:1.22
     environment:
       GOPROXY: https://registry.test4x.com/repository/go-proxy/
-      CGO_ENABLED: 0
-      GOOS: linux
-      GOARCH: arm64
     commands:
-      - rm -rf server/web
-      - mv portal/build server/web
       - cd server
-      - go build -o server-bin
-      - cp server-bin ../
-  - name: upx
-    image: hairyhenderson/upx:3.96
+      - go test ./...
+  - name: release-contract
+    image: golang:1.22
+    environment:
+      GOPROXY: https://registry.test4x.com/repository/go-proxy/
     commands:
-      - upx server-bin
-  - name: scp files
-    image: appleboy/drone-scp
-    settings:
-      host:
-        from_secret: server
-      username:
-        from_secret: username
-      key:
-        from_secret: ssh_key
-      port: 22
-      source: server-bin
-      target: ~/
-  - name: ssh deploy
-    image: appleboy/drone-ssh
-    settings:
-      host:
-        from_secret: server
-      username:
-        from_secret: username
-      key:
-        from_secret: ssh_key
-      port: 22
-      script:
-        - mv ~/server-bin /mnt/ext/app/transparent-proxy/guard
-        - /etc/init.d/transparent-proxy restart
+      - apt-get update
+      - apt-get install -y --no-install-recommends nodejs npm jq
+      - CI_VERSION="v0.0.${DRONE_BUILD_NUMBER:-0}"
+      - bash scripts/test-release-contract.sh "${CI_VERSION}"
+  - name: ipk-packaging-verify
+    image: golang:1.22
+    environment:
+      GOPROXY: https://registry.test4x.com/repository/go-proxy/
+    commands:
+      - apt-get update
+      - apt-get install -y --no-install-recommends nodejs npm jq
+      - bash scripts/build-openwrt-ipk.sh --prepare-only
+  - name: docs-lint
+    image: alpine:latest
+    commands:
+      - apk add --no-cache grep
+      - grep -r "transparent-proxy" docs/
+      - grep -r "ipk" docs/
   - name: notification
     when:
       status:

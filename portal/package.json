@@ -1,43 +1,41 @@
 {
   "name": "proxy-portal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "vite --host 127.0.0.1 --port 3000",
+    "dev": "vite",
+    "build": "tsc -b && vite build && npm run build:verify",
+    "build:verify": "node --input-type=module -e \"import { existsSync, readdirSync } from 'node:fs'; import path from 'node:path'; const webRoot = path.resolve(process.cwd(), '../server/web'); if (!existsSync(path.join(webRoot, 'index.html'))) { throw new Error('missing embedded frontend entrypoint at server/web/index.html'); } const assetsDir = path.join(webRoot, 'assets'); if (!existsSync(assetsDir) || readdirSync(assetsDir).length === 0) { throw new Error('missing embedded frontend assets in server/web/assets'); }\"",
+    "preview": "vite preview",
+    "test": "node scripts/test-compat.mjs",
+    "test:component": "vitest run",
+    "test:e2e:blocking": "bash ../scripts/openwrt-vm/test-ui-e2e.sh --suite=blocking",
+    "test:e2e:regression": "bash ../scripts/openwrt-vm/test-ui-e2e.sh --suite=regression",
+    "test:run": "vitest run",
+    "lint": "eslint . --report-unused-disable-directives --max-warnings 0"
+  },
   "dependencies": {
-    "@testing-library/jest-dom": "^5.16.3",
-    "@testing-library/react": "^12.1.4",
-    "@testing-library/user-event": "^13.5.0",
-    "axios": "^0.26.1",
-    "lodash": "^4.17.21",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2",
-    "react-scripts": "5.0.0",
-    "web-vitals": "^2.1.4"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "http-proxy-middleware": "^2.0.4"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "@playwright/test": "^1.58.2",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.1",
+    "@types/node": "^22.5.5",
+    "@types/react": "^18.3.6",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "@typescript-eslint/parser": "^8.6.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^9.10.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.12",
+    "jsdom": "^25.0.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.6",
+    "vitest": "^2.1.1"
   }
 }

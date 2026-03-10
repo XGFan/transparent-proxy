@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "v1",
+  "manifestVersion": "20260316145722",
+  "entries": [
+    {
+      "target": "/etc/hotplug.d/iface/80-ifup-wan",
+      "source": "files/etc/hotplug.d/iface/80-ifup-wan",
+      "sha256": "5e83976bc0663e9974dead57e0f596126a44de38fd47dcadac1ac8c524033ae4",
+      "permission": "0755",
+      "requiresReload": false,
+      "requiresRestart": true
+    },
+    {
+      "target": "/etc/init.d/transparent-proxy",
+      "source": "files/etc/init.d/transparent-proxy",
+      "sha256": "490c7e478cfe05d4e29d19557f76de7e0cd02a7cabdd1bb75ca1c89d188b90f4",
+      "permission": "0755",
+      "requiresReload": false,
+      "requiresRestart": true
+    },
+    {
+      "target": "/etc/nftables.d/proxy.nft",
+      "source": "files/etc/nftables.d/proxy.nft",
+      "sha256": "e2363ce576aab1136d703ff9bdba8b8fd6d6c0012ca5cc70b4b922bfc04d1593",
+      "permission": "0644",
+      "requiresReload": true,
+      "requiresRestart": false
+    },
+    {
+      "target": "/etc/nftables.d/reserved_ip.nft",
+      "source": "files/etc/nftables.d/reserved_ip.nft",
+      "sha256": "96f244204d26ad568557c064bc23f871a828166d906fb469f66c9097fe5cfa65",
+      "permission": "0644",
+      "requiresReload": true,
+      "requiresRestart": false
+    },
+    {
+      "target": "/etc/nftables.d/v6block.nft",
+      "source": "files/etc/nftables.d/v6block.nft",
+      "sha256": "c5d4f6837a185b2abdd0de52f220bcccd73a6fb9267a14cc5f0da8a184c02032",
+      "permission": "0644",
+      "requiresReload": true,
+      "requiresRestart": false
+    },
+    {
+      "target": "/etc/transparent-proxy/disable.sh",
+      "source": "files/etc/transparent-proxy/disable.sh",
+      "sha256": "e642b5017152e67847e1f07c717149dcc65ea4e5145ca6e39f1524c7030d4da9",
+      "permission": "0755",
+      "requiresReload": false,
+      "requiresRestart": false
+    },
+    {
+      "target": "/etc/transparent-proxy/enable.sh",
+      "source": "files/etc/transparent-proxy/enable.sh",
+      "sha256": "d3b6576380869ffd5b1167b27f10cf87f1e36a9155cb96edba294a0aa221f3d0",
+      "permission": "0755",
+      "requiresReload": false,
+      "requiresRestart": false
+    },
+    {
+      "target": "/etc/transparent-proxy/transparent.nft",
+      "source": "files/etc/transparent-proxy/transparent.nft",
+      "sha256": "6e4af6cdc49307738033c2a272ab1b766cf74e4f0254f50ff12294acfc3ffd6d",
+      "permission": "0644",
+      "requiresReload": true,
+      "requiresRestart": false
+    },
+    {
+      "target": "/etc/transparent-proxy/transparent_full.nft",
+      "source": "files/etc/transparent-proxy/transparent_full.nft",
+      "sha256": "b7505a721af3d286ba1bc18f7d320ac1f5ed5a7fd10d4a591c1348195a1a60d1",
+      "permission": "0644",
+      "requiresReload": true,
+      "requiresRestart": false
+    }
+  ]
+}

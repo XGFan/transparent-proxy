@@ -1,0 +1,86 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+  color: #1f2937;
+}
+
+/* ===== 顶部导航栏 ===== */
+.app-header {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: #ffffff;
+  border-bottom: 1px solid #dbe7ff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brand-icon {
+  font-size: 1.5rem;
+  color: #2563eb;
+  text-shadow: 0 0 10px rgba(37, 99, 235, 0.2);
+}
+
+.brand-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ===== 主内容区域 ===== */
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ===== 底部状态栏 ===== */
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 2rem;
+  background: #f8fbff;
+  border-top: 1px solid #dbe7ff;
+  font-size: 0.75rem;
+}
+
+.footer-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #15803d;
+}
+
+.footer-version {
+  color: #64748b;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* ===== 响应式调整 ===== */
+@media (max-width: 640px) {
+  .app-header {
+    padding: 0.875rem 1rem;
+    gap: 0.5rem;
+  }
+  
+  .brand-title {
+    font-size: 1.125rem;
+  }
+
+  .app-footer {
+    padding: 0.625rem 1rem;
+  }
+}

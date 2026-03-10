@@ -1,0 +1,17 @@
+#!/bin/sh
+[ "$ACTION" = "ifup" -a "$INTERFACE" = "wan" ] && {
+    logger "iface wan up detected, add route table"
+    while ip -4 rule list | grep -q 'fwmark 0x1.*lookup 100'; do
+        ip -4 rule del fwmark 1 table 100 2>/dev/null || break
+    done
+    ip -4 rule add fwmark 1 table 100 2>/dev/null || true
+    ip -4 route replace local 0.0.0.0/0 dev lo table 100 2>/dev/null || true
+}
+[ "$ACTION" = "ifdown" -a "$INTERFACE" = "wan" ] && {
+    logger "iface wan down detected, clear route table"
+    while ip -4 rule list | grep -q 'fwmark 0x1.*lookup 100'; do
+        ip -4 rule del fwmark 1 table 100 2>/dev/null || break
+    done
+    ip -4 route del local 0.0.0.0/0 dev lo table 100 2>/dev/null || true
+}
+exit 0

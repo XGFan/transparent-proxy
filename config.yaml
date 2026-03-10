@@ -1,0 +1,18 @@
+version: v3
+server:
+    listenAddress: :1444
+checker:
+    enabled: true
+    method: GET
+    url: https://www.google.com
+    host: www.google.com
+    timeout: 10s
+    failureThreshold: 3
+    checkInterval: 30s
+nft:
+    statePath: /etc/nftables.d
+    sets:
+        - direct_dst
+        - direct_src
+        - proxy_dst
+        - proxy_src

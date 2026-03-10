@@ -1,8 +1,15 @@
-### get all set
+### status (Canonical Envelope-First)
+# 响应包含 code, message, data。data 中包含 status, ip, sets。
 GET http://192.168.2.1:1444/api/status
 
-### add to set
-POST http://192.168.2.1:1444/api/add
+### health (Canonical Health)
+GET http://192.168.2.1:1444/api/health
+
+### rules: list (Canonical Rules)
+GET http://192.168.2.1:1444/api/rules
+
+### rules: add (Canonical Rules)
+POST http://192.168.2.1:1444/api/rules/add
 Content-Type: application/json
 
 {
@@ -10,17 +17,8 @@ Content-Type: application/json
   "set": "proxy_src"
 }
 
-### add to set 2
-POST http://192.168.2.1:1444/api/add
-Content-Type: application/json
-
-{
-  "ip": "1.2.3.34-1.2.3.56",
-  "set": "direct_src"
-}
-
-### delete from set
-DELETE http://192.168.2.1:1444/api/remove
+### rules: remove (Canonical Rules)
+POST http://192.168.2.1:1444/api/rules/remove
 Content-Type: application/json
 
 {
@@ -28,33 +26,65 @@ Content-Type: application/json
   "set": "direct_src"
 }
 
-### get v2 config
-GET http://192.168.2.1:1333/api/v2-conf
+### rules: sync (Canonical Rules)
+POST http://192.168.2.1:1444/api/rules/sync
 
+### Retained Compatibility Endpoints (保留兼容性端点)
 
-### set v2 config
-POST http://192.168.2.1:1333/api/v2-conf
+### ip (Compatibility)
+GET http://192.168.2.1:1444/api/ip
+
+### refresh-route (Compatibility)
+POST http://192.168.2.1:1444/api/refresh-route
+
+### configs: list
+GET http://192.168.2.1:1444/api/configs
+
+### configs: get by name
+GET http://192.168.2.1:1444/api/configs/main
+
+### configs: update by name
+PUT http://192.168.2.1:1444/api/configs/main
 Content-Type: application/json
 
 {
-  "protocol": "trojan",
-  "settings": {
-    "address": "43.207.107.0",
-    "port": 30056,
-    "password": "8969ec32-22c6-496f-9455-1c2f32b0fd2b"
-  },
-  "streamSettings": {
-    "security": "tls",
-    "securitySettings": {
-      "serverName": "cdn.test4x.com"
-    },
-    "socketSettings": {
-      "mark": 255,
-      "tcpFastOpen": true
-    }
-  },
-  "tag": "proxy"
+  "format": "yaml",
+  "content": "checker: {}\nnft:\n  sets:\n    - proxy_src\n"
 }
 
-### get readme
-GET http://192.168.2.1:1333/README
+### configs: validate by name（无效请求返回 4xx envelope）
+POST http://192.168.2.1:1444/api/configs/main/validate
+Content-Type: application/json
+
+{
+  "format": "yaml",
+  "content": "checker: {}\nnft:\n  sets:\n    - proxy_src\n"
+}
+
+### apply: preview
+POST http://192.168.2.1:1444/api/apply/preview
+Content-Type: application/json
+
+{}
+
+### apply: execute
+POST http://192.168.2.1:1444/api/apply/execute
+Content-Type: application/json
+
+{}
+
+### audit
+GET http://192.168.2.1:1444/api/audit
+
+### rollback
+POST http://192.168.2.1:1444/api/rollback
+Content-Type: application/json
+
+{}
+
+### 统一响应 envelope 示例
+# {
+#   "code": "ok|invalid_request|internal_error|not_implemented",
+#   "message": "...",
+#   "data": { ... }
+# }

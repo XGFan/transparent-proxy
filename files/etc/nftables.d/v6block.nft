@@ -1,0 +1,19 @@
+set allow_v6_mac {
+    type ether_addr
+    elements = {
+    }
+}
+chain sip6_547 {
+	meta nfproto ipv6 udp dport 547 ether saddr @allow_v6_mac return
+	meta nfproto ipv6 udp dport 547 drop
+}
+
+chain sip6_icmp {
+	meta l4proto ipv6-icmp ether saddr @allow_v6_mac return
+	meta l4proto ipv6-icmp drop
+}
+
+chain input_lan {
+     iifname "br-lan" jump sip6_547
+     iifname "br-lan" jump sip6_icmp
+}

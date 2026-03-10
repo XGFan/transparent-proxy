@@ -1,0 +1,13 @@
+{
+  "admin/services/transparent-proxy": {
+    "title": "Transparent Proxy",
+    "order": 90,
+    "auth": {},
+    "action": {
+      "type": "view",
+      "path": "transparent-proxy/index",
+      "fallbackNotice": "当前镜像未启用同源承载，已降级为独立管理页",
+      "fallbackTarget": "//${location.hostname}:1444/"
+    }
+  }
+}

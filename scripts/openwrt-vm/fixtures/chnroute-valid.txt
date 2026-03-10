@@ -1,0 +1,3 @@
+# deterministic fixture for /api/refresh-route
+apnic|CN|ipv4|1.0.1.0|256|20110414|allocated
+apnic|CN|ipv4|1.0.2.0|512|20110414|allocated

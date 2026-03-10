@@ -1,0 +1,12 @@
+{
+  "luci-app-transparent-proxy": {
+    "description": "Grant access to Transparent Proxy LuCI shell entry",
+    "read": {
+      "ubus": {
+        "session": [
+          "access"
+        ]
+      }
+    }
+  }
+}
