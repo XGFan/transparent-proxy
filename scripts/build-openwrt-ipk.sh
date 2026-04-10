@@ -12,7 +12,6 @@ VERSION=""
 PACKAGE="all"
 SKIP_FRONTEND=false
 OUTPUT_BASE="${DEFAULT_OUTPUT_BASE}"
-SDK_DIR="${OPENWRT_SDK_DIR:-}"
 PREPARE_ONLY=false
 
 ALL_PACKAGES=(
@@ -29,7 +28,6 @@ usage() {
   -p, --package NAME       仅构建指定包: transparent-proxy | luci-app-transparent-proxy | all
   -s, --skip-frontend      跳过前端构建（调试用）
   -o, --output-dir DIR     输出根目录 (默认: dist/ipk/)
-      --sdk-dir DIR        OpenWrt SDK 根目录（也可用 OPENWRT_SDK_DIR）
       --prepare-only       仅校验 skeleton 并准备 deterministic 输出根目录
   -h, --help               显示帮助信息
 
@@ -39,7 +37,7 @@ usage() {
 示例:
   $(basename "$0") --help
   $(basename "$0") --version v1.0.0 --prepare-only
-  $(basename "$0") --version v1.0.0 --package transparent-proxy --sdk-dir /opt/openwrt-sdk
+  $(basename "$0") --version v1.0.0 --package transparent-proxy
 EOF
   exit 0
 }
@@ -254,65 +252,6 @@ build_backend() {
   echo "✓ 后端构建完成: ${output}"
 }
 
-require_sdk() {
-  if [[ -z "${SDK_DIR}" ]]; then
-    echo "错误: 未指定 OpenWrt SDK 目录，请通过 --sdk-dir 或 OPENWRT_SDK_DIR 提供；可先用 --prepare-only 验证 workspace。" >&2
-    exit 8
-  fi
-
-  if [[ ! -f "${SDK_DIR}/rules.mk" ]] || [[ ! -f "${SDK_DIR}/include/package.mk" ]]; then
-    echo "错误: OpenWrt SDK 目录无效: ${SDK_DIR}" >&2
-    exit 9
-  fi
-}
-
-build_with_sdk() {
-  local output_root="$1"
-  shift
-  local packages=("$@")
-  local clean_version="${VERSION#v}"
-  local sdk_package_root="${SDK_DIR}/package/transparent-proxy-local"
-  local staged_binary="${sdk_package_root}/transparent-proxy/files/transparent-proxy"
-
-  mkdir -p "${output_root}/artifacts"
-
-  rm -rf "${sdk_package_root}"
-  mkdir -p "${sdk_package_root}"
-
-  local package
-  for package in "${packages[@]}"; do
-    cp -R "${OPENWRT_DIR}/${package}" "${sdk_package_root}/${package}"
-  done
-
-  if [[ -d "${sdk_package_root}/transparent-proxy" ]]; then
-    build_backend "${staged_binary}"
-  fi
-
-  for package in "${packages[@]}"; do
-    echo "构建 OpenWrt 包: ${package}"
-    make -C "${SDK_DIR}" \
-      package/transparent-proxy-local/${package}/compile \
-      V=s \
-      TP_PACKAGE_VERSION="${clean_version}" \
-      TP_PACKAGE_RELEASE=1 \
-      TP_PACKAGE_ARCH="${DEFAULT_PACKAGE_ARCH}"
-  done
-
-  shopt -s nullglob
-  local ipks=("${SDK_DIR}"/bin/packages/*/*/*transparent-proxy*.ipk)
-  shopt -u nullglob
-
-  if [[ ${#ipks[@]} -eq 0 ]]; then
-    echo "错误: 未在 OpenWrt SDK 输出目录中找到任何 ipk 产物" >&2
-    exit 10
-  fi
-
-  local artifact
-  for artifact in "${ipks[@]}"; do
-    cp "${artifact}" "${output_root}/artifacts/"
-  done
-}
-
 build_locally() {
   local output_root="$1"
   local package="$2"
@@ -347,12 +286,36 @@ build_service_ipk_locally() {
   local data_root="${workspace}/data"
   local control_root="${workspace}/control"
   local binary_path="${data_root}/usr/bin/transparent-proxy"
+  local files_root="${REPO_ROOT}/files"
   local installed_size
 
-  mkdir -p "${artifact_dir}" "${data_root}/usr/bin" "${control_root}"
+  mkdir -p "${artifact_dir}" "${control_root}"
 
+  # Binary
+  mkdir -p "${data_root}/usr/bin"
   build_backend "${binary_path}"
 
+  # Init script
+  mkdir -p "${data_root}/etc/init.d"
+  cp "${files_root}/etc/init.d/transparent-proxy" "${data_root}/etc/init.d/transparent-proxy"
+  chmod 0755 "${data_root}/etc/init.d/transparent-proxy"
+
+  # Hotplug script
+  mkdir -p "${data_root}/etc/hotplug.d/iface"
+  cp "${files_root}/etc/hotplug.d/iface/80-ifup-wan" "${data_root}/etc/hotplug.d/iface/80-ifup-wan"
+  chmod 0755 "${data_root}/etc/hotplug.d/iface/80-ifup-wan"
+
+  # Static nft rules
+  mkdir -p "${data_root}/etc/nftables.d"
+  cp "${files_root}/etc/nftables.d/reserved_ip.nft" "${data_root}/etc/nftables.d/reserved_ip.nft"
+  cp "${files_root}/etc/nftables.d/v6block.nft" "${data_root}/etc/nftables.d/v6block.nft"
+
+  # Transparent proxy config + rules source
+  mkdir -p "${data_root}/etc/transparent-proxy"
+  cp "${files_root}/etc/transparent-proxy/config.yaml" "${data_root}/etc/transparent-proxy/config.yaml"
+  cp "${files_root}/etc/transparent-proxy/transparent.nft" "${data_root}/etc/transparent-proxy/transparent.nft"
+
+  # Control scripts
   cp "${OPENWRT_DIR}/transparent-proxy/files/postinst" "${control_root}/postinst"
   cp "${OPENWRT_DIR}/transparent-proxy/files/prerm" "${control_root}/prerm"
   cp "${OPENWRT_DIR}/transparent-proxy/files/postrm" "${control_root}/postrm"
@@ -370,12 +333,12 @@ License: MIT
 Section: net
 Priority: optional
 Installed-Size: ${installed_size}
-Description: Transparent Proxy service package
+Description: nftables + tproxy transparent proxy management for OpenWrt
 EOF
 
   printf '2.0\n' > "${workspace}/debian-binary"
   create_ustar_gzip_archive "${workspace}/control.tar.gz" "${control_root}" --include-root-dot control postinst prerm postrm conffiles
-  create_ustar_gzip_archive "${workspace}/data.tar.gz" "${data_root}" --include-root-dot usr
+  create_ustar_gzip_archive "${workspace}/data.tar.gz" "${data_root}" --include-root-dot usr etc
 
   rm -f "${artifact_path}"
   create_ustar_gzip_archive "${artifact_path}" "${workspace}" debian-binary data.tar.gz control.tar.gz
@@ -474,10 +437,6 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_BASE="$2"
       shift 2
       ;;
-    --sdk-dir)
-      SDK_DIR="$2"
-      shift 2
-      ;;
     --prepare-only)
       PREPARE_ONLY=true
       shift
@@ -529,15 +488,9 @@ main() {
     echo "⚠ 跳过前端构建"
   fi
 
-  if [[ -z "${SDK_DIR}" ]]; then
-    echo "⚠ 未提供 OpenWrt SDK，使用本地最小 packager 生成 ipk"
-    for package in "${packages[@]}"; do
-      build_locally "${output_root}" "${package}"
-    done
-  else
-    require_sdk
-    build_with_sdk "${output_root}" "${packages[@]}"
-  fi
+  for package in "${packages[@]}"; do
+    build_locally "${output_root}" "${package}"
+  done
 
   echo "✓ OpenWrt ipk 构建完成"
   echo "产物目录: ${output_root}/artifacts"

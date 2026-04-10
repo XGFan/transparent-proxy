@@ -4,8 +4,8 @@ server:
 checker:
     enabled: true
     method: GET
-    url: https://www.google.com
-    host: www.google.com
+    url: https://www.qq.com
+    host: www.qq.com
     timeout: 10s
     failureThreshold: 3
     checkInterval: 30s

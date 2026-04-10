@@ -1,0 +1,10 @@
+set {{ .Name }} {
+    type {{ .Type }}
+    flags interval
+    auto-merge
+{{- if .Elements }}
+    elements = {
+        {{ join .Elements ",\n        " }}
+    }
+{{- end }}
+}

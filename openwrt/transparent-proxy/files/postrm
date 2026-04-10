@@ -10,27 +10,21 @@ case "${action}" in
   remove|purge|deconfigure)
     rm -f /var/run/transparent-proxy.pid
 
+    # Clean up runtime-generated files (not installed by IPK)
     for path in \
-      /etc/init.d/transparent-proxy \
-      /etc/hotplug.d/iface/80-ifup-wan \
-      /etc/nftables.d/direct_dst.nft \
-      /etc/nftables.d/direct_src.nft \
       /etc/nftables.d/proxy.nft \
-      /etc/nftables.d/proxy_dst.nft \
       /etc/nftables.d/proxy_src.nft \
-      /etc/nftables.d/reserved_ip.nft \
-      /etc/nftables.d/v6block.nft \
-      /etc/transparent-proxy/server \
-      /etc/transparent-proxy/disable.sh \
-      /etc/transparent-proxy/enable.sh \
-      /etc/transparent-proxy/transparent.nft \
-      /etc/transparent-proxy/transparent_full.nft \
-      /etc/transparent-proxy/state/managed-records.json
+      /etc/nftables.d/proxy_dst.nft \
+      /etc/nftables.d/direct_src.nft \
+      /etc/nftables.d/direct_dst.nft \
+      /etc/nftables.d/allow_v6_mac.nft \
+      /etc/nftables.d/chnroute.nft \
+      /usr/share/nftables.d/table-post/transparent.nft
     do
       rm -f "${path}"
     done
 
-    rmdir /etc/transparent-proxy/state >/dev/null 2>&1 || true
+    # Remove config dir if config.yaml was also removed
     if [ ! -e /etc/transparent-proxy/config.yaml ]; then
       rmdir /etc/transparent-proxy >/dev/null 2>&1 || true
     fi

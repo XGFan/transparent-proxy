@@ -1,7 +1,5 @@
 import AppShell from './app/AppShell';
 
-function App() {
+export default function App() {
   return <AppShell />;
 }
-
-export default App;

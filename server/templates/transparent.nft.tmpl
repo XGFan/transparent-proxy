@@ -1,0 +1,8 @@
+chain mangle_prerouting {
+    iifname "{{ .LanInterface }}" jump transparent_proxy
+    mark 0x1 jump transparent_proxy
+}
+
+chain mangle_output {
+    jump transparent_proxy_mask
+}

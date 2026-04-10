@@ -3,155 +3,107 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
+	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 )
 
+const gracefulShutdownTimeout = 5 * time.Second
+
+// App is the main application container.
 type App struct {
-	runtime    Runtime
 	config     *AppConfig
-	state      *AppState
 	configPath string
 
-	listenAddress string
+	nft      *NftManager
+	checker  *Checker
+	chnRoute *ChnRouteManager
 
-	nftService     *NftService
-	checkerService *CheckerService
-	serveHTTP      func(*gin.Engine, string) error
+	mu sync.RWMutex
 }
 
-type AppState struct {
-	mu           sync.RWMutex
-	bootstrapped bool
-	resourceMu   *sync.Mutex
-}
-
-func NewApp(config *AppConfig, runtime Runtime) *App {
-	app := &App{
-		runtime:       runtime,
-		config:        config,
-		state:         &AppState{resourceMu: defaultNftResourceLock()},
-		listenAddress: config.ListenAddress(),
+// NewApp creates a new App with the given dependencies.
+func NewApp(config *AppConfig, nft *NftManager, checker *Checker, chnRoute *ChnRouteManager) *App {
+	return &App{
+		config:   config,
+		nft:      nft,
+		checker:  checker,
+		chnRoute: chnRoute,
 	}
-
-	app.nftService = NewNftService(runtime, app.state.resourceLock())
-	app.checkerService = NewCheckerService(config.Checker, runtime, app.nftService)
-	app.serveHTTP = func(router *gin.Engine, listenAddress string) error {
-		return router.Run(listenAddress)
-	}
-
-	return app
 }
 
+// Bootstrap ensures nft sets exist, syncs them to files, and renders proxy rules.
 func (app *App) Bootstrap() error {
-	if app == nil {
-		return errors.New("app must not be nil")
+	if err := app.nft.EnsureSetsExist(app.config.Nft.Sets); err != nil {
+		return fmt.Errorf("ensure nft sets: %w", err)
 	}
-	app.state.markBootstrapped(false)
-	if err := app.nftService.EnsureSetsExist(app.config.Nft.Sets); err != nil {
-		return err
+	if err := app.nft.SyncAllSets(app.config.Nft.Sets); err != nil {
+		return fmt.Errorf("sync nft sets: %w", err)
 	}
-	app.state.markBootstrapped(true)
+	if err := app.nft.RenderAndLoadProxyRules(); err != nil {
+		return fmt.Errorf("render proxy rules: %w", err)
+	}
 	return nil
 }
 
+// Run starts the checker, chnroute manager, and HTTP server.
 func (app *App) Run(ctx context.Context) error {
-	if app == nil {
-		return errors.New("app must not be nil")
-	}
-	if !app.IsBootstrapped() {
-		return errors.New("app bootstrap must complete before run")
-	}
+	// Start health checker
+	app.checker.Start(ctx)
 
-	app.checkerService.Start(ctx)
+	// Ensure chnroute exists and start periodic refresh
+	if err := app.chnRoute.EnsureExists(); err != nil {
+		log.Printf("chnroute init: %v", err)
+	}
+	app.chnRoute.StartPeriodicRefresh(ctx)
 
+	// Set up HTTP server
 	router := gin.Default()
 	router.Use(static.Serve("/", static.EmbedFolder(assetData, "web")))
+	registerAPIRoutes(router.Group("/api"), app)
 
-	registerAPIRoutes(router.Group("/api"), apiServer{app: app})
-	return app.serveHTTP(router, app.listenAddress)
+	return serveHTTP(ctx, router, app.config.Listen)
 }
 
-func (app *App) IsBootstrapped() bool {
-	if app == nil {
-		return false
-	}
-	return app.state.isBootstrapped()
-}
-
+// Config returns a thread-safe copy of the current config.
 func (app *App) Config() *AppConfig {
-	if app == nil {
-		return nil
-	}
-	app.state.mu.RLock()
-	defer app.state.mu.RUnlock()
+	app.mu.RLock()
+	defer app.mu.RUnlock()
 	return app.config
 }
 
+// UpdateConfig updates the config and restarts the checker.
 func (app *App) UpdateConfig(config *AppConfig) {
-	if app == nil || config == nil {
-		return
-	}
-	checkerConfig := config.Checker
-	app.state.mu.Lock()
+	app.mu.Lock()
 	app.config = config
-	app.state.mu.Unlock()
-	if app.checkerService != nil {
-		app.checkerService.UpdateConfig(checkerConfig)
-	}
+	app.mu.Unlock()
+	app.checker.UpdateConfig(config.Checker)
 }
 
-func (app *App) ConfigPath() string {
-	if app == nil {
-		return ""
-	}
-	app.state.mu.RLock()
-	defer app.state.mu.RUnlock()
-	return app.configPath
-}
+func serveHTTP(ctx context.Context, handler http.Handler, addr string) error {
+	srv := &http.Server{Addr: addr, Handler: handler}
 
-func (app *App) SetConfigPath(configPath string) {
-	if app == nil {
-		return
-	}
-	app.state.mu.Lock()
-	defer app.state.mu.Unlock()
-	app.configPath = configPath
-}
+	errCh := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+		close(errCh)
+	}()
 
-func (state *AppState) markBootstrapped(bootstrapped bool) {
-	if state == nil {
-		return
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
 	}
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	state.bootstrapped = bootstrapped
-}
 
-func (state *AppState) isBootstrapped() bool {
-	if state == nil {
-		return false
-	}
-	state.mu.RLock()
-	defer state.mu.RUnlock()
-	return state.bootstrapped
-}
-
-func (state *AppState) resourceLock() *sync.Mutex {
-	if state == nil || state.resourceMu == nil {
-		return defaultNftResourceLock()
-	}
-	return state.resourceMu
-}
-
-func (state *AppState) withResourceLock(run func() error) error {
-	if run == nil {
-		return nil
-	}
-	lock := state.resourceLock()
-	lock.Lock()
-	defer lock.Unlock()
-	return run()
+	log.Printf("shutting down (timeout %s)...", gracefulShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
+	defer cancel()
+	return srv.Shutdown(shutdownCtx)
 }

@@ -1,0 +1,27 @@
+version: 1
+listen: ":1444"
+proxy:
+    lan_interface: br-lan
+    default_port: 1081
+    forced_port: 1082
+    self_mark: 255
+checker:
+    enabled: true
+    method: HEAD
+    url: http://www.google.com
+    host: www.google.com
+    timeout: 10s
+    interval: 30s
+    failure_threshold: 3
+    on_failure: disable
+nft:
+    state_path: /etc/nftables.d
+    sets:
+        - direct_src
+        - direct_dst
+        - proxy_src
+        - proxy_dst
+        - allow_v6_mac
+chnroute:
+    auto_refresh: true
+    refresh_interval: 168h

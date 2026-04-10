@@ -1,0 +1,23 @@
+chain transparent_proxy {
+    mark {{ printf "0x%x" .SelfMark }} return
+    ip daddr @reserved_ip return
+    meta l4proto {tcp, udp} ip saddr @proxy_src mark set 1 tproxy ip to 127.0.0.1:{{ .ForcedPort }} accept
+    ip saddr @direct_src return
+    meta l4proto {tcp, udp} ip daddr @proxy_dst mark set 1 tproxy ip to 127.0.0.1:{{ .ForcedPort }} accept
+    ip daddr @direct_dst return
+    ip daddr @chnroute return
+    meta l4proto {tcp, udp} mark set 1 tproxy ip to 127.0.0.1:{{ .DefaultPort }} accept
+}
+
+# transparent_proxy_mask handles router-originated output traffic.
+# It only decides "should this packet be proxied?" and marks it with fwmark=1.
+# The marked packet re-enters prerouting via policy routing, where transparent_proxy
+# chain makes the full decision (including proxy_dst → forced port vs default port).
+chain transparent_proxy_mask {
+    mark {{ printf "0x%x" .SelfMark }} return
+    oifname "lo" return
+    ip daddr @reserved_ip return
+    ip daddr @direct_dst return
+    ip daddr @chnroute return
+    meta l4proto {tcp, udp} mark set 1 accept
+}

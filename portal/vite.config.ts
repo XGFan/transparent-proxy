@@ -1,13 +1,13 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import preact from '@preact/preset-vite';
 import path from 'path';
 
 const embeddedFrontendOutDir = path.resolve(__dirname, '../server/web');
 
 export default defineConfig({
   base: './',
-  plugins: [react()],
+  plugins: [preact()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -39,7 +39,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}'],
   },
 });

@@ -10,52 +10,31 @@ import (
 	"strings"
 	"time"
 
-	"github.com/XGFan/netguard"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	DefaultConfigPath    = "/etc/transparent-proxy/config.yaml"
-	DefaultListenAddress = ":1444"
-	DefaultNftStatePath  = "/etc/nftables.d"
-	UserConfigPath       = "/etc/transparent-proxy/config.yaml"
-	CurrentConfigSchema  = "v3"
+	DefaultConfigPath   = "/etc/transparent-proxy/config.yaml"
+	DefaultListenAddr   = ":1444"
+	DefaultNftStatePath = "/etc/nftables.d"
+	ConfigVersion       = 1
 )
 
+// AppConfig is the top-level configuration.
 type AppConfig struct {
-	Version string        `yaml:"version,omitempty"`
-	Server  ServerConfig  `yaml:"server,omitempty"`
-	Checker CheckerConfig `yaml:"checker,omitempty"`
-	Nft     NftConfig     `yaml:"nft,omitempty"`
+	Version  int            `yaml:"version"`
+	Listen   string         `yaml:"listen,omitempty"`
+	Proxy    ProxyConfig    `yaml:"proxy,omitempty"`
+	Checker  CheckerConfig  `yaml:"checker,omitempty"`
+	Nft      NftConfig      `yaml:"nft,omitempty"`
+	ChnRoute ChnRouteConfig `yaml:"chnroute,omitempty"`
 }
 
-type ServerConfig struct {
-	ListenAddress string `yaml:"listenAddress,omitempty"`
-}
-
-type NftConfig struct {
-	StatePath string   `yaml:"statePath,omitempty"`
-	Sets      []string `yaml:"sets,omitempty"`
-}
-
-type bootstrapCheckerConfig struct {
-	Enabled          bool   `yaml:"enabled"`
-	Method           string `yaml:"method"`
-	URL              string `yaml:"url"`
-	Host             string `yaml:"host"`
-	Timeout          string `yaml:"timeout"`
-	FailureThreshold int    `yaml:"failureThreshold"`
-	CheckInterval    string `yaml:"checkInterval"`
-}
-
-type bootstrapNftConfig struct {
-	Sets []string `yaml:"sets,omitempty"`
-}
-
-type bootstrapConfigDocument struct {
-	Version string                 `yaml:"version,omitempty"`
-	Checker bootstrapCheckerConfig `yaml:"checker,omitempty"`
-	Nft     bootstrapNftConfig     `yaml:"nft,omitempty"`
+type ProxyConfig struct {
+	LanInterface string `yaml:"lan_interface,omitempty"`
+	DefaultPort  int    `yaml:"default_port,omitempty"`
+	ForcedPort   int    `yaml:"forced_port,omitempty"`
+	SelfMark     int    `yaml:"self_mark,omitempty"`
 }
 
 type CheckerConfig struct {
@@ -64,88 +43,47 @@ type CheckerConfig struct {
 	URL              string `yaml:"url,omitempty"`
 	Host             string `yaml:"host,omitempty"`
 	Timeout          string `yaml:"timeout,omitempty"`
-	FailureThreshold int    `yaml:"failureThreshold,omitempty"`
-	CheckInterval    string `yaml:"checkInterval,omitempty"`
-
-	Name      string            `yaml:"name,omitempty"`
-	Targets   []netguard.Target `yaml:"targets,omitempty"`
-	Proxy     string            `yaml:"proxy,omitempty"`
-	Threshold int               `yaml:"threshold,omitempty"`
-	PostUp    string            `yaml:"postUp,omitempty"`
-	PostDown  string            `yaml:"postDown,omitempty"`
-}
-
-type checkerConfigYAML struct {
-	Enabled          bool   `yaml:"enabled"`
-	Method           string `yaml:"method"`
-	URL              string `yaml:"url"`
-	Host             string `yaml:"host"`
-	Timeout          string `yaml:"timeout"`
-	FailureThreshold int    `yaml:"failureThreshold"`
-	CheckInterval    string `yaml:"checkInterval"`
+	Interval         string `yaml:"interval,omitempty"`
+	FailureThreshold int    `yaml:"failure_threshold,omitempty"`
+	OnFailure        string `yaml:"on_failure,omitempty"`
 	Proxy            string `yaml:"proxy,omitempty"`
 }
 
+type NftConfig struct {
+	StatePath string   `yaml:"state_path,omitempty"`
+	Sets      []string `yaml:"sets,omitempty"`
+}
+
+type ChnRouteConfig struct {
+	AutoRefresh     bool   `yaml:"auto_refresh,omitempty"`
+	RefreshInterval string `yaml:"refresh_interval,omitempty"`
+}
+
+// LoadConfig reads and parses a YAML config file.
 func LoadConfig(configPath string) (*AppConfig, error) {
 	raw, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("read config %s fail: %w", configPath, err)
+		return nil, fmt.Errorf("read config %s: %w", configPath, err)
 	}
-	return ParseConfig(raw, configPath)
+	return ParseConfig(raw)
 }
 
-func BuildDefaultBootstrapConfigYAML() ([]byte, error) {
-	document := bootstrapConfigDocument{
-		Version: CurrentConfigSchema,
-		Checker: bootstrapCheckerConfig{
-			Enabled:          true,
-			Method:           "HEAD",
-			URL:              "http://www.google.com",
-			Host:             "www.google.com",
-			Timeout:          "10s",
-			FailureThreshold: 3,
-			CheckInterval:    "30s",
-		},
-		Nft: bootstrapNftConfig{Sets: []string{"direct_src", "direct_dst", "proxy_src", "proxy_dst"}},
+// ParseConfig parses raw YAML bytes into an AppConfig.
+func ParseConfig(raw []byte) (*AppConfig, error) {
+	config := new(AppConfig)
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(config); err != nil {
+		return nil, fmt.Errorf("decode config: %w", err)
 	}
-
-	raw, err := yaml.Marshal(document)
-	if err != nil {
-		return nil, fmt.Errorf("marshal default bootstrap config fail: %w", err)
+	config.applyDefaults()
+	if err := config.validate(); err != nil {
+		return nil, err
 	}
-	return raw, nil
+	return config, nil
 }
 
-func ensureBootstrapConfigExists(configPath string) error {
-	if !shouldAutoBootstrapConfig(configPath) {
-		return nil
-	}
-
-	if _, err := os.Stat(configPath); err == nil {
-		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("stat config %s fail: %w", configPath, err)
-	}
-
-	raw, err := BuildDefaultBootstrapConfigYAML()
-	if err != nil {
-		return err
-	}
-
-	return writeBootstrapConfigAtomically(configPath, raw)
-}
-
-func shouldAutoBootstrapConfig(configPath string) bool {
-	return isUserConfigPath(configPath)
-}
-
-func writeBootstrapConfigAtomically(configPath string, raw []byte) error {
-	if _, err := ParseConfig(raw, configPath); err != nil {
-		return fmt.Errorf("validate generated bootstrap config for %s fail: %w", configPath, err)
-	}
-	return writeConfigAtomically(configPath, raw, "."+filepath.Base(configPath)+".bootstrap-*")
-}
-
+// SaveConfig validates, normalizes and atomically writes config to disk.
 func SaveConfig(configPath string, config *AppConfig) (*AppConfig, error) {
 	if config == nil {
 		return nil, errors.New("config must not be nil")
@@ -153,181 +91,158 @@ func SaveConfig(configPath string, config *AppConfig) (*AppConfig, error) {
 
 	raw, err := yaml.Marshal(config)
 	if err != nil {
-		return nil, fmt.Errorf("marshal config fail: %w", err)
+		return nil, fmt.Errorf("marshal config: %w", err)
 	}
 
-	normalized, err := ParseConfig(raw, configPath)
+	normalized, err := ParseConfig(raw)
 	if err != nil {
-		return nil, fmt.Errorf("validate config fail: %w", err)
+		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
 	raw, err = yaml.Marshal(normalized)
 	if err != nil {
-		return nil, fmt.Errorf("marshal normalized config fail: %w", err)
+		return nil, fmt.Errorf("marshal normalized config: %w", err)
 	}
 
-	if err := writeConfigAtomically(configPath, raw, "."+filepath.Base(configPath)+".config-*"); err != nil {
+	if err := writeFileAtomically(configPath, raw, 0644); err != nil {
 		return nil, err
 	}
-
 	return normalized, nil
 }
 
-func writeConfigAtomically(configPath string, raw []byte, tempPattern string) error {
-	directory := filepath.Dir(configPath)
-	if err := os.MkdirAll(directory, 0755); err != nil {
-		return fmt.Errorf("create config directory %s fail: %w", directory, err)
+// BuildDefaultConfig returns a default configuration.
+func BuildDefaultConfig() *AppConfig {
+	c := &AppConfig{
+		Version: ConfigVersion,
+		Listen:  DefaultListenAddr,
+		Proxy: ProxyConfig{
+			LanInterface: "br-lan",
+			DefaultPort:  1081,
+			ForcedPort:   1082,
+			SelfMark:     255,
+		},
+		Checker: CheckerConfig{
+			Enabled:          true,
+			Method:           "HEAD",
+			URL:              "http://www.google.com",
+			Host:             "www.google.com",
+			Timeout:          "10s",
+			Interval:         "30s",
+			FailureThreshold: 3,
+			OnFailure:        "disable",
+		},
+		Nft: NftConfig{
+			StatePath: DefaultNftStatePath,
+			Sets:      []string{"direct_src", "direct_dst", "proxy_src", "proxy_dst", "allow_v6_mac"},
+		},
+		ChnRoute: ChnRouteConfig{
+			AutoRefresh:     true,
+			RefreshInterval: "168h",
+		},
 	}
-
-	tempFile, err := os.CreateTemp(directory, tempPattern)
-	if err != nil {
-		return fmt.Errorf("create temp config for %s fail: %w", configPath, err)
-	}
-	tempPath := tempFile.Name()
-	cleanupTemp := true
-	defer func() {
-		if cleanupTemp {
-			_ = os.Remove(tempPath)
-		}
-	}()
-
-	if err := tempFile.Chmod(0644); err != nil {
-		_ = tempFile.Close()
-		return fmt.Errorf("chmod temp config %s fail: %w", tempPath, err)
-	}
-	if _, err := tempFile.Write(raw); err != nil {
-		_ = tempFile.Close()
-		return fmt.Errorf("write temp config %s fail: %w", tempPath, err)
-	}
-	if err := tempFile.Sync(); err != nil {
-		_ = tempFile.Close()
-		return fmt.Errorf("sync temp config %s fail: %w", tempPath, err)
-	}
-	if err := tempFile.Close(); err != nil {
-		return fmt.Errorf("close temp config %s fail: %w", tempPath, err)
-	}
-
-	if err := os.Rename(tempPath, configPath); err != nil {
-		return fmt.Errorf("rename temp config %s to %s fail: %w", tempPath, configPath, err)
-	}
-	cleanupTemp = false
-
-	if err := syncDirectory(directory); err != nil {
-		return fmt.Errorf("sync config directory %s fail: %w", directory, err)
-	}
-
-	return nil
+	return c
 }
 
-func ParseConfig(raw []byte, configPath string) (*AppConfig, error) {
-	config := new(AppConfig)
-	if err := decodeYAMLKnown(raw, config); err != nil {
-		return nil, fmt.Errorf("decode config fail: %w", err)
+func (c *AppConfig) applyDefaults() {
+	if c.Listen == "" {
+		c.Listen = DefaultListenAddr
 	}
-	config.ApplyDefaults()
-	if err := config.Validate(configPath); err != nil {
-		return nil, err
+	if c.Proxy.LanInterface == "" {
+		c.Proxy.LanInterface = "br-lan"
 	}
-	return config, nil
-}
-
-func (c *AppConfig) ApplyDefaults() {
-	c.Checker.ApplyDefaults()
-	if c.Server.ListenAddress == "" {
-		c.Server.ListenAddress = DefaultListenAddress
+	if c.Proxy.DefaultPort == 0 {
+		c.Proxy.DefaultPort = 1081
+	}
+	if c.Proxy.ForcedPort == 0 {
+		c.Proxy.ForcedPort = 1082
+	}
+	if c.Proxy.SelfMark == 0 {
+		c.Proxy.SelfMark = 255
+	}
+	if c.Checker.Method == "" {
+		c.Checker.Method = "HEAD"
+	}
+	if c.Checker.Timeout == "" {
+		c.Checker.Timeout = "10s"
+	}
+	if c.Checker.Interval == "" {
+		c.Checker.Interval = "30s"
+	}
+	if c.Checker.FailureThreshold <= 0 {
+		c.Checker.FailureThreshold = 3
+	}
+	if c.Checker.OnFailure == "" {
+		c.Checker.OnFailure = "disable"
+	}
+	if c.Checker.Enabled && c.Checker.Host == "" {
+		c.Checker.Host = hostFromURL(c.Checker.URL)
 	}
 	if c.Nft.StatePath == "" {
 		c.Nft.StatePath = DefaultNftStatePath
 	}
+	if c.ChnRoute.RefreshInterval == "" {
+		c.ChnRoute.RefreshInterval = "168h"
+	}
 }
 
-func (c *AppConfig) ListenAddress() string {
-	if c == nil {
-		return DefaultListenAddress
-	}
-	listenAddress := strings.TrimSpace(c.Server.ListenAddress)
-	if listenAddress == "" {
-		return DefaultListenAddress
-	}
-	return listenAddress
-}
-
-func (c *AppConfig) Validate(_ string) error {
-	if c.Version != CurrentConfigSchema {
-		if c.Version == "" {
-			return fmt.Errorf("config version must be %s", CurrentConfigSchema)
-		}
-		return fmt.Errorf("unsupported config version %q: only %s is supported", c.Version, CurrentConfigSchema)
+func (c *AppConfig) validate() error {
+	if c.Version != ConfigVersion {
+		return fmt.Errorf("unsupported config version %d: only %d is supported", c.Version, ConfigVersion)
 	}
 	if len(c.Nft.Sets) == 0 {
 		return fmt.Errorf("nft.sets must not be empty")
 	}
-	if err := c.Checker.Validate(); err != nil {
+	for _, name := range c.Nft.Sets {
+		if err := validateSetName(name); err != nil {
+			return fmt.Errorf("nft.sets: %w", err)
+		}
+	}
+	if c.Proxy.DefaultPort < 1 || c.Proxy.DefaultPort > 65535 {
+		return fmt.Errorf("proxy.default_port must be 1-65535")
+	}
+	if c.Proxy.ForcedPort < 1 || c.Proxy.ForcedPort > 65535 {
+		return fmt.Errorf("proxy.forced_port must be 1-65535")
+	}
+	if c.Proxy.SelfMark < 1 || c.Proxy.SelfMark > 255 {
+		return fmt.Errorf("proxy.self_mark must be 1-255")
+	}
+	if err := c.Checker.validate(); err != nil {
 		return err
+	}
+	if c.ChnRoute.RefreshInterval != "" {
+		if _, err := time.ParseDuration(c.ChnRoute.RefreshInterval); err != nil {
+			return fmt.Errorf("chnroute.refresh_interval: %w", err)
+		}
+	}
+	if c.Checker.OnFailure != "disable" && c.Checker.OnFailure != "keep" {
+		return fmt.Errorf("checker.on_failure must be \"disable\" or \"keep\"")
 	}
 	return nil
 }
 
-func (c *CheckerConfig) ApplyDefaults() {
-	if c == nil {
-		return
-	}
-
-	if c.EnabledFromLegacy() {
-		c.Enabled = true
-	}
-	if c.URL == "" {
-		c.URL = c.legacyURL()
-	}
-	if c.Host == "" {
-		c.Host = c.legacyHost()
-	}
-	if c.FailureThreshold <= 0 && c.Threshold > 0 {
-		c.FailureThreshold = c.Threshold
-	}
-	if strings.TrimSpace(c.Method) == "" {
-		c.Method = "HEAD"
-	}
-	if strings.TrimSpace(c.Timeout) == "" {
-		c.Timeout = "10s"
-	}
-	if c.FailureThreshold <= 0 {
-		c.FailureThreshold = 3
-	}
-	if strings.TrimSpace(c.CheckInterval) == "" {
-		c.CheckInterval = "30s"
-	}
-	if c.Enabled && strings.TrimSpace(c.Host) == "" {
-		c.Host = c.hostFromURL()
-	}
-
-	c.Name = ""
-	c.Targets = nil
-	c.Threshold = 0
-	c.PostUp = ""
-	c.PostDown = ""
-}
-
-func (c CheckerConfig) Validate() error {
+func (c *CheckerConfig) validate() error {
 	method := strings.ToUpper(strings.TrimSpace(c.Method))
 	if method != "GET" && method != "HEAD" {
 		return fmt.Errorf("checker.method must be GET or HEAD")
 	}
-	if _, err := time.ParseDuration(strings.TrimSpace(c.Timeout)); err != nil {
-		return fmt.Errorf("checker.timeout must be a valid duration: %w", err)
+	if _, err := time.ParseDuration(c.Timeout); err != nil {
+		return fmt.Errorf("checker.timeout: %w", err)
 	}
-	if _, err := time.ParseDuration(strings.TrimSpace(c.CheckInterval)); err != nil {
-		return fmt.Errorf("checker.checkInterval must be a valid duration: %w", err)
+	if _, err := time.ParseDuration(c.Interval); err != nil {
+		return fmt.Errorf("checker.interval: %w", err)
 	}
 	if c.FailureThreshold < 1 {
-		return fmt.Errorf("checker.failureThreshold must be at least 1")
+		return fmt.Errorf("checker.failure_threshold must be at least 1")
 	}
 	if !c.Enabled {
 		return nil
 	}
-	parsedURL, err := c.parsedURL()
-	if err != nil {
-		return err
+	parsedURL, err := url.Parse(c.URL)
+	if err != nil || parsedURL.Scheme == "" {
+		return fmt.Errorf("checker.url must be a valid absolute URL")
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("checker.url scheme must be http or https")
 	}
 	if parsedURL.Host == "" {
 		return fmt.Errorf("checker.url must include a host")
@@ -335,125 +250,81 @@ func (c CheckerConfig) Validate() error {
 	return nil
 }
 
-func (c CheckerConfig) MarshalYAML() (any, error) {
-	return checkerConfigYAML{
-		Enabled:          c.Enabled,
-		Method:           strings.ToUpper(strings.TrimSpace(c.Method)),
-		URL:              strings.TrimSpace(c.URL),
-		Host:             strings.TrimSpace(c.Host),
-		Timeout:          strings.TrimSpace(c.Timeout),
-		FailureThreshold: c.FailureThreshold,
-		CheckInterval:    strings.TrimSpace(c.CheckInterval),
-		Proxy:            strings.TrimSpace(c.Proxy),
-	}, nil
+func validateSetName(name string) error {
+	if name == "" {
+		return fmt.Errorf("set name must not be empty")
+	}
+	if strings.ContainsAny(name, "/\\\x00") || strings.Contains(name, "..") {
+		return fmt.Errorf("set name %q contains invalid characters", name)
+	}
+	if name != filepath.Base(name) {
+		return fmt.Errorf("set name %q must be a plain filename", name)
+	}
+	return nil
 }
 
-func (c CheckerConfig) NetguardConfig() netguard.CheckerConf {
-	if !c.Enabled {
-		return netguard.CheckerConf{}
-	}
-
-	timeout, err := time.ParseDuration(strings.TrimSpace(c.Timeout))
-	if err != nil {
-		timeout = 10 * time.Second
-	}
-	targetHost := c.hostFromURL()
-	requestHost := strings.TrimSpace(c.Host)
-	if requestHost == "" {
-		requestHost = targetHost
-	}
-
-	targets := []netguard.Target{}
-	if targetHost != "" {
-		targets = append(targets, netguard.Target{IP: targetHost, Host: requestHost})
-	}
-
-	return netguard.CheckerConf{
-		Name:      "default",
-		Targets:   targets,
-		Proxy:     strings.TrimSpace(c.Proxy),
-		Threshold: c.FailureThreshold,
-		Timeout:   timeout,
-	}
-}
-
-func (c CheckerConfig) EnabledFromLegacy() bool {
-	if c.Enabled {
-		return true
-	}
-	return strings.TrimSpace(c.Name) != "" || len(c.Targets) > 0 || c.Threshold > 0 || strings.TrimSpace(c.PostUp) != "" || strings.TrimSpace(c.PostDown) != ""
-}
-
-func (c CheckerConfig) parsedURL() (*url.URL, error) {
-	parsedURL, err := url.Parse(strings.TrimSpace(c.URL))
-	if err != nil || parsedURL == nil || parsedURL.Scheme == "" {
-		return nil, fmt.Errorf("checker.url must be a valid absolute URL")
-	}
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return nil, fmt.Errorf("checker.url scheme must be http or https")
-	}
-	return parsedURL, nil
-}
-
-func (c CheckerConfig) hostFromURL() string {
-	parsedURL, err := c.parsedURL()
+func hostFromURL(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {
 		return ""
 	}
-	return parsedURL.Host
+	return parsed.Host
 }
 
-func (c CheckerConfig) legacyURL() string {
-	if len(c.Targets) == 0 {
-		return ""
+// writeFileAtomically writes data to a temp file, then renames to target path.
+func writeFileAtomically(targetPath string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(targetPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create directory %s: %w", dir, err)
 	}
-	target := c.Targets[0]
-	address := strings.TrimSpace(target.IP)
-	if address == "" {
-		address = strings.TrimSpace(target.Host)
-	}
-	if address == "" {
-		return ""
-	}
-	return "http://" + address
-}
 
-func (c CheckerConfig) legacyHost() string {
-	if len(c.Targets) == 0 {
-		return ""
-	}
-	if host := strings.TrimSpace(c.Targets[0].Host); host != "" {
-		return host
-	}
-	return strings.TrimSpace(c.Targets[0].IP)
-}
-
-func decodeYAMLKnown(raw []byte, out any) error {
-	decoder := yaml.NewDecoder(bytes.NewReader(raw))
-	decoder.KnownFields(true)
-	return decoder.Decode(out)
-}
-
-func isUserConfigPath(path string) bool {
-	return normalizePath(path) == normalizePath(UserConfigPath)
-}
-
-func normalizePath(p string) string {
-	if p == "" {
-		return ""
-	}
-	abs, err := filepath.Abs(p)
-	if err == nil {
-		return filepath.Clean(abs)
-	}
-	return filepath.Clean(p)
-}
-
-func syncDirectory(dir string) error {
-	f, err := os.Open(dir)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(targetPath)+"-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("create temp file for %s: %w", targetPath, err)
 	}
-	defer f.Close()
-	return f.Sync()
+	tmpPath := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod %s: %w", tmpPath, err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write %s: %w", tmpPath, err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("sync %s: %w", tmpPath, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", tmpPath, err)
+	}
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		return fmt.Errorf("rename %s to %s: %w", tmpPath, targetPath, err)
+	}
+	cleanup = false
+	return nil
+}
+
+// EnsureDefaultConfig creates a default config file if it doesn't exist at the default path.
+func EnsureDefaultConfig(configPath string) error {
+	abs, _ := filepath.Abs(configPath)
+	defaultAbs, _ := filepath.Abs(DefaultConfigPath)
+	if abs != defaultAbs {
+		return nil
+	}
+	if _, err := os.Stat(configPath); err == nil {
+		return nil
+	}
+	raw, err := yaml.Marshal(BuildDefaultConfig())
+	if err != nil {
+		return fmt.Errorf("marshal default config: %w", err)
+	}
+	return writeFileAtomically(configPath, raw, 0644)
 }

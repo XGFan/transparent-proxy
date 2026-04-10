@@ -53,8 +53,8 @@ export interface CheckerConfig {
   url: string;
   host: string;
   timeout: string;
-  failureThreshold: number;
-  checkInterval: string;
+  failure_threshold: number;
+  interval: string;
 }
 
 export interface CheckerStatus {
@@ -63,8 +63,8 @@ export interface CheckerStatus {
   url?: string;
   host?: string;
   timeout?: string;
-  failureThreshold?: number;
-  checkInterval?: string;
+  failure_threshold?: number;
+  interval?: string;
   running: boolean;
   status: 'up' | 'down' | 'checking';
   consecutiveFailures: number;
@@ -111,15 +111,28 @@ function resolveApiEndpoint(endpoint: string): string {
 }
 
 async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(resolveApiEndpoint(endpoint), {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(resolveApiEndpoint(endpoint), {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw err;
+    }
+    throw new APIError('network_error', '网络连接失败，请检查网络后重试', 0);
+  }
 
-  const envelope: APIResponse<T> = await response.json();
+  let envelope: APIResponse<T>;
+  try {
+    envelope = await response.json();
+  } catch {
+    throw new APIError('parse_error', `服务器返回了无效的响应 (HTTP ${response.status})`, response.status);
+  }
 
   if (envelope.code !== 'ok') {
     throw new APIError(envelope.code, envelope.message, response.status, envelope.data);
