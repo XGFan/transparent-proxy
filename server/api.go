@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -70,6 +71,8 @@ func decodeJSON(req *http.Request, out any) error {
 func registerAPIRoutes(r *gin.RouterGroup, app *App) {
 	r.GET("/status", func(c *gin.Context) { handleStatus(c, app) })
 	r.GET("/ip", handleIP)
+	r.GET("/config", func(c *gin.Context) { handleConfigGet(c, app) })
+	r.PUT("/config", func(c *gin.Context) { handleConfigUpdate(c, app) })
 	r.GET("/checker", func(c *gin.Context) { handleCheckerGet(c, app) })
 	r.PUT("/checker", func(c *gin.Context) { handleCheckerUpdate(c, app) })
 	r.PUT("/proxy", func(c *gin.Context) { handleProxyUpdate(c, app) })
@@ -114,6 +117,73 @@ func handleStatus(c *gin.Context, app *App) {
 			"sets":  config.Nft.Sets,
 			"rules": rules,
 		},
+	})
+}
+
+// --- Config API (exposes all editable config except nft) ---
+
+type editableConfig struct {
+	Listen   string         `json:"listen"`
+	Proxy    ProxyConfig    `json:"proxy"`
+	Checker  CheckerConfig  `json:"checker"`
+	ChnRoute ChnRouteConfig `json:"chnroute"`
+}
+
+func handleConfigGet(c *gin.Context, app *App) {
+	cfg := app.Config()
+	apiOK(c, editableConfig{
+		Listen:   cfg.Listen,
+		Proxy:    cfg.Proxy,
+		Checker:  cfg.Checker,
+		ChnRoute: cfg.ChnRoute,
+	})
+}
+
+func handleConfigUpdate(c *gin.Context, app *App) {
+	var req editableConfig
+	if err := decodeJSON(c.Request, &req); err != nil {
+		apiBadRequest(c, "invalid config", err)
+		return
+	}
+
+	configPath := app.configPath
+	if configPath == "" {
+		apiServerError(c, "config path not set", nil)
+		return
+	}
+
+	// Merge editable fields into current config, preserving nft section
+	config := *app.Config()
+	config.Listen = req.Listen
+	config.Proxy = req.Proxy
+	config.Checker = req.Checker
+	config.ChnRoute = req.ChnRoute
+
+	config.applyDefaults()
+	if err := config.validate(); err != nil {
+		apiBadRequest(c, "invalid config", err)
+		return
+	}
+
+	saved, err := SaveConfig(configPath, &config)
+	if err != nil {
+		apiServerError(c, "save config failed", err)
+		return
+	}
+
+	// Apply changes
+	app.UpdateConfig(saved)
+
+	// Re-render proxy rules if proxy config changed
+	if err := app.nft.RenderAndLoadProxyRules(); err != nil {
+		log.Printf("re-render proxy rules after config update: %v", err)
+	}
+
+	apiOK(c, editableConfig{
+		Listen:   saved.Listen,
+		Proxy:    saved.Proxy,
+		Checker:  saved.Checker,
+		ChnRoute: saved.ChnRoute,
 	})
 }
 

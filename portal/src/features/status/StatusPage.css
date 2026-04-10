@@ -204,6 +204,34 @@
   white-space: nowrap;
 }
 
+.checker-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge-up {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.badge-down {
+  background: #fff5f5;
+  color: #cf1322;
+  border: 1px solid #ffccc7;
+}
+
+.badge-unknown {
+  background: #fffbe6;
+  color: #faad14;
+  border: 1px solid #ffe58f;
+}
+
 .status-enabled {
   color: #52c41a;
 }
@@ -356,6 +384,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  min-height: 28px;
 }
 
 .set-name {
@@ -445,6 +474,11 @@
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 14px;
+  text-align: right;
+}
+
+.config-row input[type="checkbox"] {
+  margin-left: auto;
 }
 
 .config-row select {
@@ -554,6 +588,7 @@
 
 .save-message {
   margin-top: 12px;
+  margin-bottom: 16px;
   padding: 10px 16px;
   border-radius: 6px;
   font-size: 14px;
@@ -715,4 +750,44 @@
 .add-btn-inline:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 系统设置 */
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.settings-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.settings-fields {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-fields .config-row input:disabled,
+.settings-fields .config-row select:disabled {
+  background: #f8f8f8;
+  color: #333;
+  border-color: #eee;
+  cursor: default;
+}
+
+.config-switch {
+  margin-left: auto;
 }

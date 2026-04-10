@@ -310,10 +310,9 @@ build_service_ipk_locally() {
   cp "${files_root}/etc/nftables.d/reserved_ip.nft" "${data_root}/etc/nftables.d/reserved_ip.nft"
   cp "${files_root}/etc/nftables.d/v6block.nft" "${data_root}/etc/nftables.d/v6block.nft"
 
-  # Transparent proxy config + rules source
+  # Default config (conffile, preserved on upgrade)
   mkdir -p "${data_root}/etc/transparent-proxy"
   cp "${files_root}/etc/transparent-proxy/config.yaml" "${data_root}/etc/transparent-proxy/config.yaml"
-  cp "${files_root}/etc/transparent-proxy/transparent.nft" "${data_root}/etc/transparent-proxy/transparent.nft"
 
   # Control scripts
   cp "${OPENWRT_DIR}/transparent-proxy/files/postinst" "${control_root}/postinst"

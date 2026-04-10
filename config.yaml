@@ -1,18 +1,28 @@
-version: v3
-server:
-    listenAddress: :1444
+version: 1
+listen: :1444
+proxy:
+    lan_interface: br-lan
+    default_port: 1081
+    forced_port: 1082
+    self_mark: 255
 checker:
     enabled: true
-    method: GET
-    url: https://www.qq.com
+    method: HEAD
+    url: http://www.qq.com
     host: www.qq.com
     timeout: 10s
-    failureThreshold: 3
-    checkInterval: 30s
+    interval: 30s
+    failure_threshold: 3
+    on_failure: disable
+    bark_token: bxZ9TrnBdD3wWeEqnDDKiS
 nft:
-    statePath: /etc/nftables.d
+    state_path: /etc/nftables.d
     sets:
-        - direct_dst
         - direct_src
-        - proxy_dst
+        - direct_dst
         - proxy_src
+        - proxy_dst
+        - allow_v6_mac
+chnroute:
+    auto_refresh: true
+    refresh_interval: 168h

@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 // Checker performs periodic health checks and toggles proxy state.
@@ -26,6 +30,7 @@ type Checker struct {
 	consecutiveFailures int
 	lastCheck           time.Time
 	lastError           string
+	notifiedDown        bool // true after failure notification sent, reset on recovery
 
 	proxyMu sync.Mutex   // serializes proxy state transitions
 	mu      sync.RWMutex // protects status fields
@@ -187,7 +192,7 @@ func (c *Checker) startLoop(ctx context.Context, config CheckerConfig) {
 	c.mu.Unlock()
 
 	timeout := parseDuration(config.Timeout, 10*time.Second)
-	client := &http.Client{Timeout: timeout}
+	client := buildCheckerClient(timeout, config.Proxy)
 
 	go func() {
 		defer func() {
@@ -221,10 +226,12 @@ func (c *Checker) checkOnce(ctx context.Context, config CheckerConfig, client *h
 
 	if success {
 		c.mu.Lock()
+		wasDown := c.notifiedDown
 		c.status = 1
 		c.consecutiveFailures = 0
 		c.lastCheck = now
 		c.lastError = ""
+		c.notifiedDown = false
 		c.mu.Unlock()
 
 		if actionErr := c.tryEnableProxy(); actionErr != nil {
@@ -233,6 +240,10 @@ func (c *Checker) checkOnce(ctx context.Context, config CheckerConfig, client *h
 			c.lastError = actionErr.Error()
 			c.mu.Unlock()
 		}
+
+		if wasDown {
+			sendBarkNotification(config.BarkToken, "透明代理恢复")
+		}
 		return
 	}
 
@@ -240,6 +251,7 @@ func (c *Checker) checkOnce(ctx context.Context, config CheckerConfig, client *h
 	if err != nil {
 		lastError = err.Error()
 	}
+	log.Printf("checker: health check failed: %s", lastError)
 
 	c.mu.Lock()
 	c.status = -1
@@ -252,13 +264,26 @@ func (c *Checker) checkOnce(ctx context.Context, config CheckerConfig, client *h
 	}
 	thresholdReached := c.consecutiveFailures >= threshold
 	onFailure := config.OnFailure
+	alreadyNotified := c.notifiedDown
 	c.mu.Unlock()
 
 	if !thresholdReached {
 		return
 	}
 
-	// on_failure: "keep" means don't disable proxy even on failure
+	// Send failure notification once
+	if !alreadyNotified {
+		c.mu.Lock()
+		c.notifiedDown = true
+		c.mu.Unlock()
+
+		action := "禁用代理"
+		if onFailure == "keep" {
+			action = "保持代理"
+		}
+		sendBarkNotification(config.BarkToken, fmt.Sprintf("透明代理错误，操作：%s", action))
+	}
+
 	if onFailure == "keep" {
 		return
 	}
@@ -335,4 +360,56 @@ func parseDuration(raw string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return d
+}
+
+// buildCheckerClient creates an HTTP client, optionally with SOCKS5 proxy.
+func buildCheckerClient(timeout time.Duration, proxyAddr string) *http.Client {
+	proxyAddr = strings.TrimSpace(proxyAddr)
+	if proxyAddr == "" {
+		return &http.Client{Timeout: timeout}
+	}
+
+	dialer, err := proxy.SOCKS5("tcp", proxyAddr, nil, proxy.Direct)
+	if err != nil {
+		log.Printf("checker: invalid socks5 proxy %q, using direct: %v", proxyAddr, err)
+		return &http.Client{Timeout: timeout}
+	}
+
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return dialer.Dial(network, addr)
+			},
+		},
+	}
+}
+
+// sendBarkNotification sends a push notification via Bark.
+// Failures are logged but never affect the caller.
+func sendBarkNotification(token, message string) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return
+	}
+
+	barkURL := fmt.Sprintf("https://api.day.app/%s/%s",
+		url.PathEscape(token),
+		url.PathEscape(message))
+
+	go func() {
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Get(barkURL)
+		if err != nil {
+			log.Printf("bark notification failed: %v", err)
+			return
+		}
+		defer resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			log.Printf("bark notification sent: %s", message)
+		} else {
+			log.Printf("bark notification failed: status %d", resp.StatusCode)
+		}
+	}()
 }

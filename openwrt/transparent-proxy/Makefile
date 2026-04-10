@@ -45,10 +45,9 @@ define Package/transparent-proxy/install
 	$(INSTALL_DATA) ../../files/etc/nftables.d/reserved_ip.nft $(1)/etc/nftables.d/reserved_ip.nft
 	$(INSTALL_DATA) ../../files/etc/nftables.d/v6block.nft $(1)/etc/nftables.d/v6block.nft
 
-	# Transparent proxy config + rules template
+	# Default config (conffile, preserved on upgrade)
 	$(INSTALL_DIR) $(1)/etc/transparent-proxy
 	$(INSTALL_CONF) ../../files/etc/transparent-proxy/config.yaml $(1)/etc/transparent-proxy/config.yaml
-	$(INSTALL_DATA) ../../files/etc/transparent-proxy/transparent.nft $(1)/etc/transparent-proxy/transparent.nft
 endef
 
 define Package/transparent-proxy/conffiles

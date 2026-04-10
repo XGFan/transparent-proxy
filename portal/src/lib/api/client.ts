@@ -55,6 +55,9 @@ export interface CheckerConfig {
   timeout: string;
   failure_threshold: number;
   interval: string;
+  on_failure?: string;
+  proxy?: string;
+  bark_token?: string;
 }
 
 export interface CheckerStatus {
@@ -141,6 +144,25 @@ async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T
   return envelope.data;
 }
 
+export interface ProxyConfig {
+  lan_interface: string;
+  default_port: number;
+  forced_port: number;
+  self_mark: number;
+}
+
+export interface ChnRouteConfig {
+  auto_refresh: boolean;
+  refresh_interval: string;
+}
+
+export interface EditableConfig {
+  listen: string;
+  proxy: ProxyConfig;
+  checker: CheckerConfig;
+  chnroute: ChnRouteConfig;
+}
+
 export const api = {
   async getStatus(): Promise<StatusData> {
     return apiRequest<StatusData>('/status');
@@ -189,6 +211,17 @@ export const api = {
     return apiRequest<StatusData['proxy']>('/proxy', {
       method: 'PUT',
       body: JSON.stringify({ enabled }),
+    });
+  },
+
+  async getConfig(): Promise<EditableConfig> {
+    return apiRequest<EditableConfig>('/config');
+  },
+
+  async updateConfig(config: EditableConfig): Promise<EditableConfig> {
+    return apiRequest<EditableConfig>('/config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
     });
   },
 };

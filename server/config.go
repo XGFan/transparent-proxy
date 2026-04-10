@@ -31,32 +31,33 @@ type AppConfig struct {
 }
 
 type ProxyConfig struct {
-	LanInterface string `yaml:"lan_interface,omitempty"`
-	DefaultPort  int    `yaml:"default_port,omitempty"`
-	ForcedPort   int    `yaml:"forced_port,omitempty"`
-	SelfMark     int    `yaml:"self_mark,omitempty"`
+	LanInterface string `yaml:"lan_interface,omitempty" json:"lan_interface"`
+	DefaultPort  int    `yaml:"default_port,omitempty" json:"default_port"`
+	ForcedPort   int    `yaml:"forced_port,omitempty" json:"forced_port"`
+	SelfMark     int    `yaml:"self_mark,omitempty" json:"self_mark"`
 }
 
 type CheckerConfig struct {
-	Enabled          bool   `yaml:"enabled,omitempty"`
-	Method           string `yaml:"method,omitempty"`
-	URL              string `yaml:"url,omitempty"`
-	Host             string `yaml:"host,omitempty"`
-	Timeout          string `yaml:"timeout,omitempty"`
-	Interval         string `yaml:"interval,omitempty"`
-	FailureThreshold int    `yaml:"failure_threshold,omitempty"`
-	OnFailure        string `yaml:"on_failure,omitempty"`
-	Proxy            string `yaml:"proxy,omitempty"`
+	Enabled          bool   `yaml:"enabled,omitempty" json:"enabled"`
+	Method           string `yaml:"method,omitempty" json:"method"`
+	URL              string `yaml:"url,omitempty" json:"url"`
+	Host             string `yaml:"host,omitempty" json:"host"`
+	Timeout          string `yaml:"timeout,omitempty" json:"timeout"`
+	Interval         string `yaml:"interval,omitempty" json:"interval"`
+	FailureThreshold int    `yaml:"failure_threshold,omitempty" json:"failure_threshold"`
+	OnFailure        string `yaml:"on_failure,omitempty" json:"on_failure"`
+	Proxy            string `yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	BarkToken        string `yaml:"bark_token,omitempty" json:"bark_token,omitempty"`
 }
 
 type NftConfig struct {
-	StatePath string   `yaml:"state_path,omitempty"`
-	Sets      []string `yaml:"sets,omitempty"`
+	StatePath string   `yaml:"state_path,omitempty" json:"state_path"`
+	Sets      []string `yaml:"sets,omitempty" json:"sets"`
 }
 
 type ChnRouteConfig struct {
-	AutoRefresh     bool   `yaml:"auto_refresh,omitempty"`
-	RefreshInterval string `yaml:"refresh_interval,omitempty"`
+	AutoRefresh     bool   `yaml:"auto_refresh,omitempty" json:"auto_refresh"`
+	RefreshInterval string `yaml:"refresh_interval,omitempty" json:"refresh_interval"`
 }
 
 // LoadConfig reads and parses a YAML config file.
