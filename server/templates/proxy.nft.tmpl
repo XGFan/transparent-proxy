@@ -1,4 +1,5 @@
 chain transparent_proxy {
+    meta nfproto ipv6 return
     mark {{ printf "0x%x" .SelfMark }} return
     ip daddr @reserved_ip return
     meta l4proto {tcp, udp} ip saddr @proxy_src mark set 1 tproxy ip to 127.0.0.1:{{ .ForcedPort }} accept
@@ -14,6 +15,7 @@ chain transparent_proxy {
 # The marked packet re-enters prerouting via policy routing, where transparent_proxy
 # chain makes the full decision (including proxy_dst → forced port vs default port).
 chain transparent_proxy_mask {
+    meta nfproto ipv6 return
     mark {{ printf "0x%x" .SelfMark }} return
     oifname "lo" return
     ip daddr @reserved_ip return
