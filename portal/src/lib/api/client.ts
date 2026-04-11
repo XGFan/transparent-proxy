@@ -51,7 +51,7 @@ export interface CheckerConfig {
   enabled: boolean;
   method: 'GET' | 'HEAD';
   url: string;
-  host: string;
+  host?: string;
   timeout: string;
   failure_threshold: number;
   interval: string;

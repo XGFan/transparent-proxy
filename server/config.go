@@ -41,7 +41,7 @@ type CheckerConfig struct {
 	Enabled          bool   `yaml:"enabled,omitempty" json:"enabled"`
 	Method           string `yaml:"method,omitempty" json:"method"`
 	URL              string `yaml:"url,omitempty" json:"url"`
-	Host             string `yaml:"host,omitempty" json:"host"`
+	Host             string `yaml:"host,omitempty" json:"host,omitempty"`
 	Timeout          string `yaml:"timeout,omitempty" json:"timeout"`
 	Interval         string `yaml:"interval,omitempty" json:"interval"`
 	FailureThreshold int    `yaml:"failure_threshold,omitempty" json:"failure_threshold"`
@@ -175,9 +175,6 @@ func (c *AppConfig) applyDefaults() {
 	if c.Checker.OnFailure == "" {
 		c.Checker.OnFailure = "disable"
 	}
-	if c.Checker.Enabled && c.Checker.Host == "" {
-		c.Checker.Host = hostFromURL(c.Checker.URL)
-	}
 	if c.Nft.StatePath == "" {
 		c.Nft.StatePath = DefaultNftStatePath
 	}
@@ -262,14 +259,6 @@ func validateSetName(name string) error {
 		return fmt.Errorf("set name %q must be a plain filename", name)
 	}
 	return nil
-}
-
-func hostFromURL(rawURL string) string {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil {
-		return ""
-	}
-	return parsed.Host
 }
 
 // writeFileAtomically writes data to a temp file, then renames to target path.

@@ -163,11 +163,13 @@ export function SettingsCard({ checkerStatus }: Props) {
                   <input type="text" value={d.checker.url} disabled={!editing}
                     onChange={e => setDraft({ ...draft, checker: { ...draft.checker, url: (e.target as HTMLInputElement).value } })} />
                 </label>
-                <label className="config-row">
-                  <span>Host 头</span>
-                  <input type="text" value={d.checker.host} disabled={!editing}
-                    onChange={e => setDraft({ ...draft, checker: { ...draft.checker, host: (e.target as HTMLInputElement).value } })} />
-                </label>
+                {(editing || d.checker.host) && (
+                  <label className="config-row">
+                    <span>Host 头</span>
+                    <input type="text" value={d.checker.host ?? ''} disabled={!editing}
+                      onChange={e => setDraft({ ...draft, checker: { ...draft.checker, host: (e.target as HTMLInputElement).value || undefined } })} />
+                  </label>
+                )}
                 <label className="config-row">
                   <span>超时时间</span>
                   <input type="text" value={d.checker.timeout} disabled={!editing}
@@ -191,18 +193,22 @@ export function SettingsCard({ checkerStatus }: Props) {
                     <option value="keep">保持代理</option>
                   </select>
                 </label>
-                <label className="config-row">
-                  <span>SOCKS5 代理</span>
-                  <input type="text" value={d.checker.proxy ?? ''} disabled={!editing}
-                    placeholder="如 127.0.0.1:1080"
-                    onChange={e => setDraft({ ...draft, checker: { ...draft.checker, proxy: (e.target as HTMLInputElement).value } })} />
-                </label>
-                <label className="config-row">
-                  <span>Bark Token</span>
-                  <input type="text" value={d.checker.bark_token ?? ''} disabled={!editing}
-                    placeholder="留空则不通知"
-                    onChange={e => setDraft({ ...draft, checker: { ...draft.checker, bark_token: (e.target as HTMLInputElement).value } })} />
-                </label>
+                {(editing || d.checker.proxy) && (
+                  <label className="config-row">
+                    <span>SOCKS5 代理</span>
+                    <input type="text" value={d.checker.proxy ?? ''} disabled={!editing}
+                      placeholder="如 127.0.0.1:1080"
+                      onChange={e => setDraft({ ...draft, checker: { ...draft.checker, proxy: (e.target as HTMLInputElement).value || undefined } })} />
+                  </label>
+                )}
+                {(editing || d.checker.bark_token) && (
+                  <label className="config-row">
+                    <span>Bark Token</span>
+                    <input type="text" value={d.checker.bark_token ?? ''} disabled={!editing}
+                      placeholder="留空则不通知"
+                      onChange={e => setDraft({ ...draft, checker: { ...draft.checker, bark_token: (e.target as HTMLInputElement).value || undefined } })} />
+                  </label>
+                )}
               </>
             )}
           </div>

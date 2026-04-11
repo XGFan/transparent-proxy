@@ -9,7 +9,6 @@ checker:
     enabled: true
     method: HEAD
     url: http://www.qq.com
-    host: www.qq.com
     timeout: 10s
     interval: 30s
     failure_threshold: 3

@@ -46,41 +46,14 @@
   overflow-y: auto;
 }
 
-/* ===== 底部状态栏 ===== */
-.app-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 2rem;
-  background: #f8fbff;
-  border-top: 1px solid #dbe7ff;
-  font-size: 0.75rem;
-}
-
-.footer-status {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #15803d;
-}
-
-.footer-version {
-  color: #64748b;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-}
-
 /* ===== 响应式调整 ===== */
 @media (max-width: 640px) {
   .app-header {
     padding: 0.875rem 1rem;
     gap: 0.5rem;
   }
-  
+
   .brand-title {
     font-size: 1.125rem;
-  }
-
-  .app-footer {
-    padding: 0.625rem 1rem;
   }
 }

@@ -14,11 +14,6 @@ function AppShell() {
       <main className="app-main">
         <StatusPage />
       </main>
-
-      <footer className="app-footer">
-        <span className="footer-status">Ready</span>
-        <span className="footer-version">v0.3.0</span>
-      </footer>
     </div>
   );
 }
