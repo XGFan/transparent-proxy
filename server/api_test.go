@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -431,5 +432,73 @@ func TestAPI_RuleAdd_InvalidRange(t *testing.T) {
 	w := doRequest(router, "POST", "/api/rules/add", `{"ip": "10.0.0.255-10.0.0.1", "set": "direct_dst"}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status code = %d, want 400 for reversed range", w.Code)
+	}
+}
+
+func TestAPI_RuleAdd_DuplicateIdempotent(t *testing.T) {
+	app := testApp(t)
+	if err := app.nft.EnsureSetsExist(app.Config().Nft.Sets); err != nil {
+		t.Fatalf("EnsureSetsExist: %v", err)
+	}
+	router := testRouter(app)
+
+	body := `{"ip": "1.2.3.4", "set": "direct_dst"}`
+	w := doRequest(router, "POST", "/api/rules/add", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("first add: status code = %d, want 200\nbody: %s", w.Code, w.Body.String())
+	}
+
+	// Adding the same IP again must also succeed (nft add element is idempotent).
+	w = doRequest(router, "POST", "/api/rules/add", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("duplicate add: status code = %d, want 200\nbody: %s", w.Code, w.Body.String())
+	}
+	resp := parseResponse(t, w)
+	if resp.Code != "ok" {
+		t.Errorf("duplicate add: code = %q, want ok", resp.Code)
+	}
+}
+
+func TestAPI_RuleRemove_DuplicateIdempotent(t *testing.T) {
+	app := testApp(t)
+	if err := app.nft.EnsureSetsExist(app.Config().Nft.Sets); err != nil {
+		t.Fatalf("EnsureSetsExist: %v", err)
+	}
+	router := testRouter(app)
+
+	// Add then remove once.
+	doRequest(router, "POST", "/api/rules/add", `{"ip": "1.2.3.4", "set": "direct_dst"}`)
+	w := doRequest(router, "POST", "/api/rules/remove", `{"ip": "1.2.3.4", "set": "direct_dst"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("first remove: status code = %d, want 200\nbody: %s", w.Code, w.Body.String())
+	}
+
+	// Removing the same IP again: MemoryNft.deleteElement calls Go's delete() on a
+	// missing map key, which is a no-op, so the mock returns nil and the API succeeds.
+	w = doRequest(router, "POST", "/api/rules/remove", `{"ip": "1.2.3.4", "set": "direct_dst"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("duplicate remove: status code = %d, want 200\nbody: %s", w.Code, w.Body.String())
+	}
+	resp := parseResponse(t, w)
+	if resp.Code != "ok" {
+		t.Errorf("duplicate remove: code = %q, want ok", resp.Code)
+	}
+}
+
+func TestAPI_RefreshRoute_FetcherError(t *testing.T) {
+	app := testApp(t)
+	app.chnRoute.fetcher = &MemoryFetcher{Err: fmt.Errorf("network unreachable")}
+	router := testRouter(app)
+
+	w := doRequest(router, "POST", "/api/refresh-route", "")
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status code = %d, want 500\nbody: %s", w.Code, w.Body.String())
+	}
+	resp := parseResponse(t, w)
+	if resp.Code != "internal_error" {
+		t.Errorf("code = %q, want internal_error", resp.Code)
+	}
+	if !strings.Contains(resp.Message, "refresh route failed") {
+		t.Errorf("message = %q, want mention of refresh route failed", resp.Message)
 	}
 }

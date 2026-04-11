@@ -10,14 +10,14 @@ steps:
       - npm ci
       - npm run build
   - name: server-test
-    image: golang:1.22
+    image: golang:1.25
     environment:
       GOPROXY: https://registry.test4x.com/repository/go-proxy/
     commands:
       - cd server
       - go test ./...
   - name: release-contract
-    image: golang:1.22
+    image: golang:1.25
     environment:
       GOPROXY: https://registry.test4x.com/repository/go-proxy/
     commands:
@@ -26,7 +26,7 @@ steps:
       - CI_VERSION="v0.0.${DRONE_BUILD_NUMBER:-0}"
       - bash scripts/test-release-contract.sh "${CI_VERSION}"
   - name: ipk-packaging-verify
-    image: golang:1.22
+    image: golang:1.25
     environment:
       GOPROXY: https://registry.test4x.com/repository/go-proxy/
     commands:

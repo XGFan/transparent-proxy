@@ -126,7 +126,6 @@ func BuildDefaultConfig() *AppConfig {
 			Enabled:          true,
 			Method:           "HEAD",
 			URL:              "http://www.google.com",
-			Host:             "www.google.com",
 			Timeout:          "10s",
 			Interval:         "30s",
 			FailureThreshold: 3,

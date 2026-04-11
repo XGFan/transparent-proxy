@@ -11,8 +11,6 @@
     "preview": "vite preview",
     "test": "node scripts/test-compat.mjs",
     "test:component": "vitest run",
-    "test:e2e:blocking": "bash ../scripts/openwrt-vm/test-ui-e2e.sh --suite=blocking",
-    "test:e2e:regression": "bash ../scripts/openwrt-vm/test-ui-e2e.sh --suite=regression",
     "test:run": "vitest run",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0"
   },
@@ -20,7 +18,6 @@
     "preact": "^10.25.4"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
     "@preact/preset-vite": "^2.9.3",
     "@types/node": "^22.5.5",
     "@typescript-eslint/eslint-plugin": "^8.6.0",

@@ -18,49 +18,6 @@
 
 ## 发布脚本
 
-### generate-manifest.sh
-
-自动生成 `files/managed-manifest.json`。
-
-```bash
-# 生成 manifest
-./scripts/generate-manifest.sh
-
-# 仅校验（不修改文件）
-./scripts/generate-manifest.sh --check
-
-# 指定版本号
-./scripts/generate-manifest.sh -m "1.0.0"
-
-# 输出到指定路径
-./scripts/generate-manifest.sh -o /tmp/manifest.json
-```
-
-**选项：**
-
-| 选项 | 说明 | 默认值 |
-|------|------|--------|
-| `-o, --output` | 输出路径 | `files/managed-manifest.json` |
-| `-c, --check` | 仅校验，不修改 | false |
-| `-s, --schema-version` | schema 版本 | `v1` |
-| `-m, --manifest-version` | manifest 版本 | 时间戳 |
-| `-h, --help` | 显示帮助 | - |
-
-**推断规则：**
-
-根据文件路径自动推断属性：
-
-| 路径模式 | permission | requiresRestart | requiresReload |
-|---------|-----------|-----------------|----------------|
-| `/etc/init.d/transparent-proxy` | 0755 | true | false |
-| `/etc/hotplug.d/*` | 0755 | true | false |
-| `/etc/transparent-proxy/*.sh` | 0755 | false | false |
-| `/etc/nftables.d/*` | 0644 | false | true |
-| `*.nft` | 0644 | false | true |
-| 其他 | 0644 | false | false |
-
-**依赖：** `jq`, `shasum` (macOS) 或 `sha256sum` (Linux)
-
 ### build-release.sh
 
 构建 OpenWrt ARM64 单文件发布物。
@@ -111,19 +68,18 @@ dist/
 
 **构建流程：**
 
-1. 调用 `generate-manifest.sh` 生成 manifest
-2. 构建前端：`npm ci && npm run build`
-3. 交叉编译后端：`GOOS=linux GOARCH=arm64 go build`
-4. 可选 UPX 压缩
-5. 直接输出 `transparent-proxy_<version>_linux_arm64`
-6. 为该单文件生成 sibling `.sha256`
+1. 构建前端：`npm ci && npm run build`
+2. 交叉编译后端：`GOOS=linux GOARCH=arm64 go build`
+3. 可选 UPX 压缩
+4. 直接输出 `transparent-proxy_<version>_linux_arm64`
+5. 为该单文件生成 sibling `.sha256`
 
 ### build-openwrt-ipk.sh
 
 构建 OpenWrt 标准 `.ipk` 包。
 
 ```bash
-# 完整构建（需 OpenWrt SDK）
+# 完整构建（本地 Minimal Packager，无需 OpenWrt SDK）
 ./scripts/build-openwrt-ipk.sh
 
 # 仅构建服务包
@@ -155,11 +111,11 @@ dist/ipk/<version>/
 
 **说明：**
 
-- 脚本支持在无 OpenWrt SDK 的环境下通过 `--prepare-only` 验证打包逻辑。
-- 真实构建依赖 OpenWrt SDK 环境。
+- 脚本采用本地 Minimal Packager 方式构建，不依赖 OpenWrt SDK。
+- `--prepare-only` 仅验证工作区 skeleton 和输出目录结构，不执行实际构建。
 - 脚本会自动清理 `dist/ipk/<version>/` 临时产物。
 
-**依赖：** `go`, `npm`, `jq`, `tar`, `gzip`, `OpenWrt SDK`（可选）
+**依赖：** `go`, `npm`, `python3`, `tar`
 
 ## OpenWrt VM 测试脚本
 

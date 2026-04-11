@@ -348,3 +348,16 @@ func TestSyncAllSets(t *testing.T) {
 		}
 	}
 }
+
+func TestSyncAllSets_MissingSetReturnsError(t *testing.T) {
+	nft, _, _ := newTestNft(t)
+
+	// "ghost" was never created in MemoryNft, so textListSet will return an error.
+	err := nft.SyncAllSets([]string{"ghost"})
+	if err == nil {
+		t.Fatal("expected error for missing set, got nil")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Errorf("error = %q, want mention of set name ghost", err.Error())
+	}
+}

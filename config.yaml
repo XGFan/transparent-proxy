@@ -13,7 +13,6 @@ checker:
     interval: 30s
     failure_threshold: 3
     on_failure: disable
-    bark_token: bxZ9TrnBdD3wWeEqnDDKiS
 nft:
     state_path: /etc/nftables.d
     sets:
