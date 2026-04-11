@@ -8,3 +8,9 @@ watchdog/web
 .tmp/
 portal/dist-node/
 portal/tsconfig.tsbuildinfo
+.sisyphus/
+.opencode/
+.omc/
+.claude/
+dist/
+server/web/assets/*
