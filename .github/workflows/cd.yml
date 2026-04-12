@@ -22,19 +22,18 @@ jobs:
 
       - name: Install tools
         run: |
+          mkdir -p "$HOME/.local/bin"
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
           if ! command -v jq &>/dev/null; then
-            if command -v apt-get &>/dev/null; then
-              sudo apt-get update && sudo apt-get install -y jq
-            elif command -v apk &>/dev/null; then
-              apk add --no-cache jq
-            fi
+            curl -sL "https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64" -o "$HOME/.local/bin/jq"
+            chmod +x "$HOME/.local/bin/jq"
           fi
+
           if ! command -v gh &>/dev/null; then
-            if command -v apt-get &>/dev/null; then
-              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-              sudo apt-get update && sudo apt-get install -y gh
-            fi
+            GH_VERSION=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | grep -oP '"tag_name":\s*"v\K[^"]+')
+            curl -sL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" | tar xz --strip-components=1 -C "$HOME/.local"
           fi
 
       - name: Determine version
