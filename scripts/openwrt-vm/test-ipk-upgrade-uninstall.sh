@@ -474,7 +474,7 @@ guest_stage="$1"
 guest_server="$2"
 guest_config="$3"
 guest_initd="$4"
-expected_service_command="/etc/transparent-proxy/server -c /etc/transparent-proxy/config.yaml"
+expected_service_command="/usr/bin/transparent-proxy -c /etc/transparent-proxy/config.yaml"
 
 remove_package() {
   package_name="$1"
@@ -516,12 +516,8 @@ $0 !~ /^Package: luci-app-transparent-proxy(\n|$)/\
     /etc/nftables.d/proxy_src.nft \
     /etc/nftables.d/reserved_ip.nft \
     /etc/nftables.d/v6block.nft \
-    /etc/transparent-proxy/server \
     /etc/transparent-proxy/config.yaml \
-    /etc/transparent-proxy/disable.sh \
-    /etc/transparent-proxy/enable.sh \
-    /etc/transparent-proxy/transparent.nft \
-    /etc/transparent-proxy/transparent_full.nft \
+    /usr/share/nftables.d/table-post/transparent.nft \
     /etc/transparent-proxy/state/managed-records.json \
     /var/run/transparent-proxy.pid
   do
@@ -588,7 +584,7 @@ guest_stage="$1"
 guest_server="$2"
 guest_config="$3"
 guest_initd="$4"
-expected_service_command="/etc/transparent-proxy/server -c /etc/transparent-proxy/config.yaml"
+expected_service_command="/usr/bin/transparent-proxy -c /etc/transparent-proxy/config.yaml"
 feed_conf="${guest_stage}/opkg-task11.conf"
 distfeeds_conf="/etc/opkg/distfeeds.conf"
 customfeeds_conf="/etc/opkg/customfeeds.conf"
@@ -763,7 +759,7 @@ guest_stage="$1"
 guest_server="$2"
 guest_config="$3"
 guest_initd="$4"
-expected_service_command="/etc/transparent-proxy/server -c /etc/transparent-proxy/config.yaml"
+expected_service_command="/usr/bin/transparent-proxy -c /etc/transparent-proxy/config.yaml"
 
 remove_package() {
   package_name="$1"
@@ -805,12 +801,8 @@ $0 !~ /^Package: luci-app-transparent-proxy(\n|$)/\
     /etc/nftables.d/proxy_src.nft \
     /etc/nftables.d/reserved_ip.nft \
     /etc/nftables.d/v6block.nft \
-    /etc/transparent-proxy/server \
     /etc/transparent-proxy/config.yaml \
-    /etc/transparent-proxy/disable.sh \
-    /etc/transparent-proxy/enable.sh \
-    /etc/transparent-proxy/transparent.nft \
-    /etc/transparent-proxy/transparent_full.nft \
+    /usr/share/nftables.d/table-post/transparent.nft \
     /etc/transparent-proxy/state/managed-records.json \
     /var/run/transparent-proxy.pid
   do
@@ -871,7 +863,7 @@ printf '\npost-remove-luci-opkg-status=\n'
 opkg status luci-app-transparent-proxy >/tmp/task11-luci-status.$$ 2>&1 || true
 cat /tmp/task11-luci-status.$$
 rm -f /tmp/task11-luci-status.$$
-printf '\nservice-still-present=%s\n' "$(test -x /etc/transparent-proxy/server && printf yes || printf no)"
+printf '\nservice-still-present=%s\n' "$(test -x /usr/bin/transparent-proxy && printf yes || printf no)"
 printf 'menu-json=%s\n' "$(test -e /usr/share/luci/menu.d/transparent-proxy.json && printf present || printf absent)"
 printf 'view-js=%s\n' "$(test -e /www/luci-static/resources/view/transparent-proxy/index.js && printf present || printf absent)"
 EOF
@@ -924,7 +916,7 @@ opkg status luci-app-transparent-proxy >/tmp/task11-luci-status.$$ 2>&1 || true
 cat /tmp/task11-luci-status.$$
 rm -f /tmp/task11-luci-status.$$
 
-printf '\nservice-binary=%s\n' "$(test -e /etc/transparent-proxy/server && printf present || printf absent)"
+printf '\nservice-binary=%s\n' "$(test -e /usr/bin/transparent-proxy && printf present || printf absent)"
 printf 'service-initd=%s\n' "$(test -e /etc/init.d/transparent-proxy && printf present || printf absent)"
 printf 'menu-json=%s\n' "$(test -e /usr/share/luci/menu.d/transparent-proxy.json && printf present || printf absent)"
 printf 'view-js=%s\n' "$(test -e /www/luci-static/resources/view/transparent-proxy/index.js && printf present || printf absent)"

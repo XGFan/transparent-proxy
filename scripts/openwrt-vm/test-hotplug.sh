@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/env.sh"
 
 SSH_BIN="${SSH_BIN:-ssh}"
+CURL_BIN="${CURL_BIN:-curl}"
 CMP_BIN="${CMP_BIN:-cmp}"
 
 LOG_FILE="${OPENWRT_VM_LOG_DIR}/hotplug-$(date +%Y%m%d-%H%M%S).log"
@@ -64,6 +65,7 @@ resolve_command() {
 
 prepare_tools() {
   SSH_BIN="$(resolve_command "${SSH_BIN}")" || fail "缺少 ssh 可执行文件: ${SSH_BIN}"
+  CURL_BIN="$(resolve_command "${CURL_BIN}")" || fail "缺少 curl 可执行文件: ${CURL_BIN}"
   CMP_BIN="$(resolve_command "${CMP_BIN}")" || fail "缺少 cmp 可执行文件: ${CMP_BIN}"
 
   [[ -f "${OPENWRT_TEST_KEY_PATH}" ]] || fail "测试 SSH 私钥不存在: ${OPENWRT_TEST_KEY_PATH}"
@@ -126,8 +128,15 @@ run_ssh_capture_script() {
   CAPTURE_STDERR_FILE="${stderr_file}"
 }
 
+# Cleanup guest state: disable proxy via API, ifdown hotplug, drain residual rules
 run_guest_cleanup_capture() {
   local label="$1"
+
+  # Best-effort disable via API (service may not be running)
+  "${CURL_BIN}" -sS -o /dev/null -X PUT \
+    -H 'Content-Type: application/json' \
+    -d '{"enabled":false}' \
+    "${TP_API_BASE_URL}/api/proxy" 2>/dev/null || true
 
   run_ssh_capture_script "${label}" <<'EOF'
 set -eu
@@ -165,7 +174,6 @@ drain_table_100_routes() {
   return 1
 }
 
-/etc/transparent-proxy/disable.sh >/dev/null 2>&1 || true
 ACTION=ifdown INTERFACE=wan /etc/hotplug.d/iface/80-ifup-wan >/dev/null 2>&1 || true
 
 drain_fwmark_rules
@@ -223,10 +231,33 @@ ensure_canonical_deploy() {
   log '执行 deploy.sh，确保 canonical guest layout 已部署'
   bash "${SCRIPT_DIR}/deploy.sh"
 
-  run_ssh 'test -x /etc/hotplug.d/iface/80-ifup-wan && test -x /etc/transparent-proxy/enable.sh && test -x /etc/transparent-proxy/disable.sh && test -f /etc/transparent-proxy/transparent.nft && test -f /etc/transparent-proxy/transparent_full.nft && test -d /usr/share/nftables.d/table-post' \
-    || fail 'guest hotplug/enable/disable 布局断言失败'
+  # Layout assertion: binary, init.d, hotplug, table-post dir
+  run_ssh 'test -x /usr/bin/transparent-proxy && test -f /etc/init.d/transparent-proxy && test -x /etc/hotplug.d/iface/80-ifup-wan && test -d /usr/share/nftables.d/table-post' \
+    || fail 'guest 布局断言失败：binary / init.d / hotplug / table-post 目录'
 
   log 'canonical deploy 断言通过'
+}
+
+# Ensure the transparent-proxy service is running (required for API calls)
+ensure_service_running() {
+  log '确保 transparent-proxy 服务正在运行'
+
+  run_ssh '/etc/init.d/transparent-proxy enable && /etc/init.d/transparent-proxy start' \
+    || fail '启动 transparent-proxy 服务失败'
+
+  # Wait for API readiness
+  local attempt
+  for attempt in $(seq 1 30); do
+    local status
+    status="$("${CURL_BIN}" -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 5 "${TP_API_BASE_URL}/api/status" 2>/dev/null || true)"
+    if [[ "${status}" == '200' ]]; then
+      log "API 已就绪 (attempt=${attempt})"
+      return 0
+    fi
+    sleep 1
+  done
+
+  fail "API 未在时限内就绪: ${TP_API_BASE_URL}/api/status"
 }
 
 ensure_guest_clean_state() {
@@ -238,28 +269,18 @@ ensure_guest_clean_state() {
   assert_guest_clean_state 'clean-baseline'
 }
 
-ensure_enable_prerequisite_chains() {
-  log '准备 enable.sh 依赖的 fw4 jump target 链：transparent_proxy / transparent_proxy_mask（缺失则创建空链）'
+# Verify proxy chains (transparent_proxy / transparent_proxy_mask) exist from bootstrap
+ensure_proxy_chains_exist() {
+  log '验证 proxy 链已存在（来自 bootstrap 的 proxy.nft）'
   run_ssh_script <<'EOF'
 set -eu
 
 nft list table inet fw4 >/dev/null 2>&1
-
-ensure_chain() {
-  chain_name="$1"
-  if nft list chain inet fw4 "$chain_name" >/dev/null 2>&1; then
-    printf 'chain ready: %s\n' "$chain_name"
-    return 0
-  fi
-
-  nft add chain inet fw4 "$chain_name"
-  nft list chain inet fw4 "$chain_name" >/dev/null 2>&1
-  printf 'chain created: %s\n' "$chain_name"
-}
-
-ensure_chain transparent_proxy
-ensure_chain transparent_proxy_mask
+nft list chain inet fw4 transparent_proxy >/dev/null 2>&1
+nft list chain inet fw4 transparent_proxy_mask >/dev/null 2>&1
 EOF
+
+  log 'proxy 链断言通过：transparent_proxy / transparent_proxy_mask 均已存在'
 }
 
 assert_guest_clean_state() {
@@ -278,6 +299,29 @@ route_output="$(ip route show table 100 || true)"
 EOF
 
   log "清理态断言通过: ${stage}"
+}
+
+# Call the API to enable/disable proxy
+api_proxy_toggle() {
+  local enabled="$1"
+  local label="$2"
+
+  local body status
+  body="$(mktemp "${OPENWRT_VM_RUN_DIR}/hotplug.${label}.api-body.XXXXXX")"
+  TMP_FILES+=("${body}")
+
+  status="$("${CURL_BIN}" -sS -o "${body}" -w '%{http_code}' --connect-timeout 5 --max-time 10 \
+    -X PUT \
+    -H 'Content-Type: application/json' \
+    -d "{\"enabled\":${enabled}}" \
+    "${TP_API_BASE_URL}/api/proxy")"
+
+  if [[ "${status}" != '200' ]]; then
+    log "API 响应: status=${status}, body=$(<"${body}")"
+    fail "API proxy toggle 失败 (enabled=${enabled}): HTTP ${status}"
+  fi
+
+  log "API proxy toggle 成功: enabled=${enabled}"
 }
 
 capture_enable_state_snapshot() {
@@ -365,6 +409,7 @@ log_capture() {
   fi
 }
 
+# Verify enable state: mangle chains have jump rules, table-post file exists
 assert_enable_applied() {
   run_ssh_script <<'EOF'
 set -eu
@@ -374,8 +419,6 @@ prerouting="$(nft list chain inet fw4 mangle_prerouting)"
 output="$(nft list chain inet fw4 mangle_output)"
 
 test -f "$target"
-grep -F -- 'chain mangle_prerouting' "$target" >/dev/null
-grep -F -- 'chain mangle_output' "$target" >/dev/null
 
 case "$prerouting" in
   *'jump transparent_proxy'*) ;;
@@ -388,9 +431,10 @@ case "$output" in
 esac
 EOF
 
-  log 'enable 语义断言通过：target 文件存在，fw4 链可访问且规则已写入'
+  log 'enable 语义断言通过：target 文件存在，mangle 链包含 jump 规则'
 }
 
+# Verify disable state: mangle chains empty, table-post file deleted
 assert_disable_applied() {
   run_ssh_script <<'EOF'
 set -eu
@@ -412,7 +456,7 @@ case "$output" in
 esac
 EOF
 
-  log 'disable 语义断言通过：target 文件已删除，fw4 链仍可访问且规则已清空'
+  log 'disable 语义断言通过：target 文件已删除，mangle 链已清空'
 }
 
 assert_ifup_applied() {
@@ -470,7 +514,7 @@ classify_repeated_result() {
 
   if (( result_rc == 0 )); then
     if capture_contains_duplicate_signal "${result_stdout_file}" || capture_contains_duplicate_signal "${result_stderr_file}"; then
-      log "重复 ${name} 分类：状态未漂移，但输出显式暴露 duplicate/File exists 条件（脚本出口=0）"
+      log "重复 ${name} 分类：状态未漂移，但输出显式暴露 duplicate/File exists 条件（出口=0）"
     else
       log "重复 ${name} 分类：幂等成功，第二次执行返回 0 且状态不变"
     fi
@@ -486,22 +530,20 @@ classify_repeated_result() {
   fi
 }
 
+# Step: enable/disable via API, verify nft state
 test_enable_disable_semantics() {
-  log '步骤 4/5：执行 enable.sh / disable.sh，并验证真实语义'
+  log '步骤 3/4：通过 API 执行 enable / disable，并验证 nft 语义'
 
-  run_ssh_capture 'enable-first' '/etc/transparent-proxy/enable.sh'
-  [[ ${CAPTURE_RC} -eq 0 ]] || fail "首次 enable.sh 失败: rc=${CAPTURE_RC}, stderr=$(<"${CAPTURE_STDERR_FILE}")"
-  log_capture '首次 enable'
+  api_proxy_toggle 'true' 'enable-first'
   assert_enable_applied
 
-  run_ssh_capture 'disable-first' '/etc/transparent-proxy/disable.sh'
-  [[ ${CAPTURE_RC} -eq 0 ]] || fail "首次 disable.sh 失败: rc=${CAPTURE_RC}, stderr=$(<"${CAPTURE_STDERR_FILE}")"
-  log_capture '首次 disable'
+  api_proxy_toggle 'false' 'disable-first'
   assert_disable_applied
 }
 
+# Step: hotplug ifup/ifdown, verify ip rule and route table 100
 test_hotplug_semantics() {
-  log '步骤 6/7：执行 ifup / ifdown，并验证 table 100 与 fwmark 规则语义'
+  log '步骤 5：执行 ifup / ifdown hotplug，并验证 table 100 与 fwmark 规则语义'
 
   run_ssh_capture 'ifup-first' 'env' 'ACTION=ifup' 'INTERFACE=wan' '/etc/hotplug.d/iface/80-ifup-wan'
   [[ ${CAPTURE_RC} -eq 0 ]] || fail "首次 ifup 失败: rc=${CAPTURE_RC}, stderr=$(<"${CAPTURE_STDERR_FILE}")"
@@ -514,38 +556,43 @@ test_hotplug_semantics() {
   assert_ifdown_applied
 }
 
+# Step: enable idempotency -- enable twice, nft state should not duplicate
 test_repeated_enable_behavior() {
-  local before_snapshot after_snapshot result_rc result_stdout result_stderr
+  local before_snapshot after_snapshot
 
-  log '步骤 8a：验证 repeated enable 的确定性行为'
+  log '步骤 6：验证 repeated enable (via API) 的幂等行为'
   ensure_guest_clean_state
 
-  run_ssh_capture 'enable-repeat-prime' '/etc/transparent-proxy/enable.sh'
-  [[ ${CAPTURE_RC} -eq 0 ]] || fail "重复 enable 前的基线 enable 失败: rc=${CAPTURE_RC}, stderr=$(<"${CAPTURE_STDERR_FILE}")"
+  api_proxy_toggle 'true' 'enable-repeat-prime'
   assert_enable_applied
 
   capture_enable_state_snapshot 'enable-repeat-before'
   before_snapshot="${CAPTURE_STDOUT_FILE}"
 
-  run_ssh_capture 'enable-repeat-second' '/etc/transparent-proxy/enable.sh'
-  result_rc="${CAPTURE_RC}"
-  result_stdout="${CAPTURE_STDOUT_FILE}"
-  result_stderr="${CAPTURE_STDERR_FILE}"
+  # Second enable -- should be idempotent (EnableProxy flushes then re-applies)
+  api_proxy_toggle 'true' 'enable-repeat-second'
+
   capture_enable_state_snapshot 'enable-repeat-after'
   after_snapshot="${CAPTURE_STDOUT_FILE}"
 
-  classify_repeated_result 'enable' "${before_snapshot}" "${after_snapshot}" "${result_rc}" "${result_stdout}" "${result_stderr}"
+  if ! snapshot_files_equal "${before_snapshot}" "${after_snapshot}"; then
+    log "重复 enable 前快照: $(<"${before_snapshot}")"
+    log "重复 enable 后快照: $(<"${after_snapshot}")"
+    fail '重复 enable 后 guest 状态发生漂移；前后快照不一致'
+  fi
+  log '重复 enable 幂等断言通过：前后快照一致'
+
   assert_enable_applied
 
-  run_ssh_capture 'enable-repeat-disable' '/etc/transparent-proxy/disable.sh'
-  [[ ${CAPTURE_RC} -eq 0 ]] || fail "重复 enable 后 cleanup disable 失败: rc=${CAPTURE_RC}, stderr=$(<"${CAPTURE_STDERR_FILE}")"
+  api_proxy_toggle 'false' 'enable-repeat-cleanup'
   assert_disable_applied
 }
 
+# Step: repeated ifup idempotency
 test_repeated_ifup_behavior() {
   local before_snapshot after_snapshot rule_count result_rc result_stdout result_stderr
 
-  log '步骤 8b：验证 repeated ifup 的确定性行为'
+  log '步骤 5b：验证 repeated ifup 的确定性行为'
   ensure_guest_clean_state
 
   run_ssh_capture 'ifup-repeat-prime' 'env' 'ACTION=ifup' 'INTERFACE=wan' '/etc/hotplug.d/iface/80-ifup-wan'
@@ -578,20 +625,36 @@ main() {
   log "开始执行 OpenWrt hotplug suite，日志文件: ${LOG_FILE}"
   prepare_tools
 
+  # Step 0: VM readiness
   ensure_vm_running_and_ready
   ensure_canonical_deploy
-  ensure_guest_clean_state
-  ensure_enable_prerequisite_chains
 
+  # Step 1: ensure service is running for API access
+  ensure_service_running
+
+  # Step 1b: clean baseline
+  ensure_guest_clean_state
+
+  # Step 2: verify proxy chains from bootstrap
+  ensure_proxy_chains_exist
+
+  # Step 3-4: enable/disable via API
   test_enable_disable_semantics
+
+  # Step 5: hotplug ifup/ifdown
   test_hotplug_semantics
-  test_repeated_enable_behavior
+
+  # Step 5b: repeated ifup idempotency
   test_repeated_ifup_behavior
 
+  # Step 6: repeated enable idempotency
+  test_repeated_enable_behavior
+
+  # Step 7: final cleanup
   ensure_guest_clean_state
   assert_guest_clean_state 'suite-final'
 
-  log 'hotplug / enable-disable / repeated-behavior 全部断言通过'
+  log 'hotplug / enable-disable(API) / repeated-behavior 全部断言通过'
 }
 
 main "$@"

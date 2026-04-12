@@ -207,7 +207,7 @@ guest_stage="$1"
 guest_server="$2"
 guest_config="$3"
 guest_initd="$4"
-expected_service_command="/etc/transparent-proxy/server -c /etc/transparent-proxy/config.yaml"
+expected_service_command="/usr/bin/transparent-proxy -c /etc/transparent-proxy/config.yaml"
 
 reset_guest_layout() {
   if [ -x /etc/init.d/transparent-proxy ]; then
@@ -234,12 +234,8 @@ reset_guest_layout() {
     /etc/nftables.d/proxy_src.nft \
     /etc/nftables.d/reserved_ip.nft \
     /etc/nftables.d/v6block.nft \
-    /etc/transparent-proxy/server \
     /etc/transparent-proxy/config.yaml \
-    /etc/transparent-proxy/disable.sh \
-    /etc/transparent-proxy/enable.sh \
-    /etc/transparent-proxy/transparent.nft \
-    /etc/transparent-proxy/transparent_full.nft \
+    /usr/share/nftables.d/table-post/transparent.nft \
     /etc/transparent-proxy/state/managed-records.json
   do
     rm -f "${path}"
@@ -261,9 +257,7 @@ assert_install_result() {
   for path in \
     /etc/hotplug.d/iface/80-ifup-wan \
     /etc/nftables.d/direct_dst.nft \
-    /etc/nftables.d/proxy.nft \
-    /etc/transparent-proxy/enable.sh \
-    /etc/transparent-proxy/transparent.nft
+    /etc/nftables.d/proxy.nft
   do
     test -f "${path}"
   done
@@ -280,7 +274,7 @@ opkg status transparent-proxy
 printf '\n== canonical files ==\n'
 ls -l /usr/bin/transparent-proxy "${guest_server}" "${guest_config}" "${guest_initd}"
 printf '\n== managed assets ==\n'
-ls -l /etc/hotplug.d/iface/80-ifup-wan /etc/nftables.d/direct_dst.nft /etc/nftables.d/proxy.nft /etc/transparent-proxy/enable.sh /etc/transparent-proxy/transparent.nft
+ls -l /etc/hotplug.d/iface/80-ifup-wan /etc/nftables.d/direct_dst.nft /etc/nftables.d/proxy.nft
 printf '\n== init command assertion ==\n'
 grep -nF -- "${expected_service_command}" "${guest_initd}"
 printf '\n== service lifecycle ==\n'
@@ -300,7 +294,7 @@ guest_stage="$1"
 guest_server="$2"
 guest_config="$3"
 guest_initd="$4"
-expected_service_command="/etc/transparent-proxy/server -c /etc/transparent-proxy/config.yaml"
+expected_service_command="/usr/bin/transparent-proxy -c /etc/transparent-proxy/config.yaml"
 feed_conf="${guest_stage}/opkg-lifecycle.conf"
 before_copy="${guest_stage}/config-before-upgrade.yaml"
 distfeeds_conf="/etc/opkg/distfeeds.conf"

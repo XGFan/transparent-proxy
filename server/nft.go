@@ -276,6 +276,10 @@ func (m *NftManager) RenderAndLoadProxyRules() error {
 		return fmt.Errorf("write proxy.nft: %w", err)
 	}
 
+	// Flush existing proxy chains to prevent rule duplication (ignore errors if chains don't exist yet)
+	m.exec.Run("flush", "chain", "inet", "fw4", "transparent_proxy")
+	m.exec.Run("flush", "chain", "inet", "fw4", "transparent_proxy_mask")
+
 	// Wrap in table and load
 	full := fmt.Sprintf("table inet fw4 {\n%s}\n", content)
 	tmpFile, err := os.CreateTemp("", "proxy-*.nft")

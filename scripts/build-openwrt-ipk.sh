@@ -331,6 +331,7 @@ Maintainer: transparent-proxy project
 License: MIT
 Section: net
 Priority: optional
+Depends: kmod-nft-tproxy
 Installed-Size: ${installed_size}
 Description: nftables + tproxy transparent proxy management for OpenWrt
 EOF

@@ -17,6 +17,7 @@ define Package/transparent-proxy
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Transparent Proxy service
+  DEPENDS:=+kmod-nft-tproxy
   PKGARCH:=$(TP_PACKAGE_ARCH)
 endef
 

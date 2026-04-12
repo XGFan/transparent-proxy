@@ -42,11 +42,20 @@ func (app *App) Bootstrap() error {
 	if err := app.nft.EnsureSetsExist(app.config.Nft.Sets); err != nil {
 		return fmt.Errorf("ensure nft sets: %w", err)
 	}
+	// Ensure infrastructure sets referenced by proxy.nft exist (may be empty until
+	// fw4 loads reserved_ip.nft or ChnRouteManager populates chnroute.nft).
+	if err := app.nft.EnsureSetsExist([]string{"reserved_ip", "chnroute"}); err != nil {
+		return fmt.Errorf("ensure infrastructure sets: %w", err)
+	}
 	if err := app.nft.SyncAllSets(app.config.Nft.Sets); err != nil {
 		return fmt.Errorf("sync nft sets: %w", err)
 	}
+	if err := app.chnRoute.EnsureExists(); err != nil {
+		log.Printf("chnroute init: %v", err)
+	}
 	if err := app.nft.RenderAndLoadProxyRules(); err != nil {
-		return fmt.Errorf("render proxy rules: %w", err)
+		log.Printf("WARNING: proxy rules not loaded (tproxy module may be unavailable): %v", err)
+		log.Printf("proxy rules written to disk and will take effect on next fw4 restart")
 	}
 	return nil
 }
@@ -56,10 +65,7 @@ func (app *App) Run(ctx context.Context) error {
 	// Start health checker
 	app.checker.Start(ctx)
 
-	// Ensure chnroute exists and start periodic refresh
-	if err := app.chnRoute.EnsureExists(); err != nil {
-		log.Printf("chnroute init: %v", err)
-	}
+	// Start periodic chnroute refresh (initial data loaded in Bootstrap)
 	app.chnRoute.StartPeriodicRefresh(ctx)
 
 	// Set up HTTP server

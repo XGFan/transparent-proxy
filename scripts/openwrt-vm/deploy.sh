@@ -15,7 +15,7 @@ GUEST_ROOT="${OPENWRT_GUEST_ROOT}"
 GUEST_SERVER="${OPENWRT_GUEST_SERVER}"
 GUEST_CONFIG="${OPENWRT_GUEST_CONFIG}"
 GUEST_INITD="${OPENWRT_GUEST_INITD}"
-EXPECTED_SERVICE_COMMAND="${GUEST_SERVER} -c ${GUEST_CONFIG}"
+EXPECTED_SERVICE_COMMAND="/usr/bin/transparent-proxy -c ${GUEST_CONFIG}"
 REMOTE_STAGE=""
 HOST_STAGE_DIR=""
 
@@ -115,6 +115,13 @@ prepare_host_stage() {
   )
 
   chmod 755 "${HOST_STAGE_DIR}/server"
+
+  # Stage supporting files (init.d, hotplug, static nft rules)
+  local files_root="${OPENWRT_VM_REPO_ROOT}/files"
+  cp "${files_root}/etc/init.d/transparent-proxy" "${HOST_STAGE_DIR}/initd"
+  cp "${files_root}/etc/hotplug.d/iface/80-ifup-wan" "${HOST_STAGE_DIR}/hotplug"
+  cp "${files_root}/etc/nftables.d/reserved_ip.nft" "${HOST_STAGE_DIR}/reserved_ip.nft"
+  cp "${files_root}/etc/nftables.d/v6block.nft" "${HOST_STAGE_DIR}/v6block.nft"
 }
 
 upload_stage() {
@@ -122,6 +129,10 @@ upload_stage() {
 
   run_ssh "mkdir -p '${REMOTE_STAGE}'"
   run_scp "${HOST_STAGE_DIR}/server" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_STAGE}/server"
+  run_scp "${HOST_STAGE_DIR}/initd" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_STAGE}/initd"
+  run_scp "${HOST_STAGE_DIR}/hotplug" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_STAGE}/hotplug"
+  run_scp "${HOST_STAGE_DIR}/reserved_ip.nft" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_STAGE}/reserved_ip.nft"
+  run_scp "${HOST_STAGE_DIR}/v6block.nft" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_STAGE}/v6block.nft"
 }
 
 install_on_guest() {
@@ -202,7 +213,21 @@ run_bootstrap_once() {
 test -f "${stage}/server"
 mkdir -p "${guest_root}"
 
+# Install supporting files before bootstrap
+install_file "${stage}/initd" "${guest_initd}" 755
+mkdir -p /etc/hotplug.d/iface
+install_file "${stage}/hotplug" /etc/hotplug.d/iface/80-ifup-wan 755
+mkdir -p /etc/nftables.d
+mkdir -p /usr/share/nftables.d/table-post
+install_file "${stage}/reserved_ip.nft" /etc/nftables.d/reserved_ip.nft 644
+install_file "${stage}/v6block.nft" /etc/nftables.d/v6block.nft 644
+
+# Load static nft rules so sets exist before bootstrap
+nft -f /etc/nftables.d/reserved_ip.nft 2>/dev/null || true
+nft -f /etc/nftables.d/v6block.nft 2>/dev/null || true
+
 install_file "${stage}/server" "${guest_server}" 755
+install_file "${stage}/server" /usr/bin/transparent-proxy 755
 run_bootstrap_once
 
 test -x "${guest_server}"

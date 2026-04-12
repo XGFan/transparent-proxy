@@ -142,7 +142,7 @@ tar --zstd -xf "${archive_path}" -C "${work_root}"
 cp -a /input/files/. "${local_files}/"
 
 cd "${ib_dir}"
-make image PROFILE="generic" FILES="${local_files}" BIN_DIR="${local_out}"
+make image PROFILE="generic" PACKAGES="kmod-nft-tproxy" FILES="${local_files}" BIN_DIR="${local_out}"
 
 built_img_gz="$(ls -1 "${local_out}"/openwrt-*-armsr-armv8-generic-ext4-combined-efi.img.gz 2>/dev/null | head -n 1 || true)"
 

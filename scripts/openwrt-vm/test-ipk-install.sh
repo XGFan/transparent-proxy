@@ -296,7 +296,7 @@ guest_stage="$1"
 guest_server="$2"
 guest_config="$3"
 guest_initd="$4"
-expected_service_command="/etc/transparent-proxy/server -c /etc/transparent-proxy/config.yaml"
+expected_service_command="/usr/bin/transparent-proxy -c /etc/transparent-proxy/config.yaml"
 
 remove_package() {
   package_name="$1"
@@ -338,12 +338,8 @@ $0 !~ /^Package: luci-app-transparent-proxy(\n|$)/\
     /etc/nftables.d/proxy_src.nft \
     /etc/nftables.d/reserved_ip.nft \
     /etc/nftables.d/v6block.nft \
-    /etc/transparent-proxy/server \
     /etc/transparent-proxy/config.yaml \
-    /etc/transparent-proxy/disable.sh \
-    /etc/transparent-proxy/enable.sh \
-    /etc/transparent-proxy/transparent.nft \
-    /etc/transparent-proxy/transparent_full.nft \
+    /usr/share/nftables.d/table-post/transparent.nft \
     /etc/transparent-proxy/state/managed-records.json \
     /var/run/transparent-proxy.pid
   do
@@ -370,9 +366,7 @@ assert_service_only_result() {
   for path in \
     /etc/hotplug.d/iface/80-ifup-wan \
     /etc/nftables.d/direct_dst.nft \
-    /etc/nftables.d/proxy.nft \
-    /etc/transparent-proxy/enable.sh \
-    /etc/transparent-proxy/transparent.nft
+    /etc/nftables.d/proxy.nft
   do
     test -f "${path}"
   done
