@@ -86,18 +86,48 @@ jobs:
             --title "${{ github.ref_name }}" \
             --generate-notes
 
+  latest-release:
+    needs: [build-ipk]
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ipk-packages
+          path: ipk
+      - name: Collect IPK files
+        run: |
+          mkdir -p release
+          find ipk -name '*.ipk' -exec cp {} release/ \;
+          ls -lh release/
+      - name: Update latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --repo "${{ github.repository }}" --yes 2>/dev/null || true
+          git tag -f latest
+          git push -f origin latest
+          gh release create latest release/*.ipk \
+            --repo "${{ github.repository }}" \
+            --title "Latest (master)" \
+            --notes "Rolling release from master branch (${{ github.sha }})" \
+            --prerelease
+
   notification:
     runs-on: ubuntu-latest
-    needs: [portal-lint, server-test, build-ipk]
-    if: always() && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    needs: [portal-lint, server-test, build-ipk, release, latest-release]
+    if: always()
     steps:
       - name: Send Bark notification
         run: |
-          if [ "${{ needs.portal-lint.result }}" = "success" ] && \
-             [ "${{ needs.server-test.result }}" = "success" ] && \
-             [ "${{ needs.build-ipk.result }}" = "success" ]; then
-            STATUS="success"
-          else
-            STATUS="failure"
-          fi
+          FAILED=false
+          for result in "${{ needs.portal-lint.result }}" "${{ needs.server-test.result }}" "${{ needs.build-ipk.result }}" "${{ needs.release.result }}" "${{ needs.latest-release.result }}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              FAILED=true
+            fi
+          done
+          if [ "$FAILED" = "true" ]; then STATUS="failure"; else STATUS="success"; fi
           curl -s "https://api.day.app/${{ secrets.BARK_TOKEN }}/${{ github.repository }}+CI+${STATUS}/${{ github.ref_name }}"

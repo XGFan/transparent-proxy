@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag (e.g. v1.0.0). Leave empty for latest."
+        description: "Release tag (e.g. v1.0.0, or 'latest')"
         required: false
-        default: ""
+        default: "latest"
 
 jobs:
   deploy:
@@ -43,11 +43,8 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             echo "tag=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
-          elif [[ -n "${{ inputs.version }}" ]]; then
-            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            TAG=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
-            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Download IPK from release
