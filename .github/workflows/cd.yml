@@ -20,27 +20,28 @@ jobs:
     steps:
       - name: Determine version
         id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             echo "tag=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
           elif [[ -n "${{ inputs.version }}" ]]; then
             echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            TAG=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
+            TAG=$(curl -s -H "Authorization: Bearer ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r .tag_name)
             echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Download IPK from release
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p /tmp/ipk-deploy
-          gh release download "${{ steps.version.outputs.tag }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "*.ipk" \
-            --dir /tmp/ipk-deploy
+          curl -s -H "Authorization: Bearer ${{ github.token }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.version.outputs.tag }}" \
+            | jq -r '.assets[] | select(.name | endswith(".ipk")) | "\(.url) \(.name)"' \
+            | while read -r url name; do
+                curl -sL -H "Authorization: Bearer ${{ github.token }}" \
+                  -H "Accept: application/octet-stream" \
+                  "$url" -o "/tmp/ipk-deploy/${name}"
+              done
           ls -lh /tmp/ipk-deploy/
 
       - name: Deploy to OpenWrt
