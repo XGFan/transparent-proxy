@@ -1,0 +1,77 @@
+name: CD
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (e.g. v1.0.0). Leave empty for latest."
+        required: false
+        default: ""
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Determine version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download IPK from release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/ipk-deploy
+          gh release download "${{ steps.version.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.ipk" \
+            --dir /tmp/ipk-deploy
+          ls -lh /tmp/ipk-deploy/
+
+      - name: Deploy to OpenWrt
+        env:
+          SSH_KEY: ${{ secrets.CI_SSH_KEY }}
+          SSH_HOST: ${{ secrets.OPENWRT_HOST }}
+          SSH_USER: ${{ secrets.OPENWRT_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${SSH_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
+
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
+
+          scp ${SSH_OPTS} /tmp/ipk-deploy/*.ipk "${SSH_USER}@${SSH_HOST}:/tmp/"
+          ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" << 'EOF'
+            opkg install /tmp/transparent-proxy_*.ipk
+            opkg install /tmp/luci-app-transparent-proxy_*.ipk
+            /etc/init.d/transparent-proxy restart
+            rm -f /tmp/*.ipk
+          EOF
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf /tmp/ipk-deploy
+          rm -f ~/.ssh/deploy_key
+
+      - name: Send Bark notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            STATUS="deployed"
+          else
+            STATUS="deploy_failed"
+          fi
+          curl -s "https://api.day.app/${{ secrets.BARK_TOKEN }}/${{ github.repository }}+CD+${STATUS}/${{ steps.version.outputs.tag }}"
