@@ -11,35 +11,24 @@ on:
         required: false
         default: "latest"
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: self-hosted
+    permissions:
+      contents: read
+      actions: read
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install tools
-        run: |
-          mkdir -p "$HOME/.local/bin"
-          export PATH="$HOME/.local/bin:$PATH"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-          if ! command -v jq &>/dev/null; then
-            curl -sL "https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64" -o "$HOME/.local/bin/jq"
-            chmod +x "$HOME/.local/bin/jq"
-          fi
-
-          if ! command -v gh &>/dev/null; then
-            GH_VERSION=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | grep -oP '"tag_name":\s*"v\K[^"]+')
-            curl -sL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" | tar xz --strip-components=1 -C "$HOME/.local"
-          fi
+      - uses: actions/checkout@v6
 
       - name: Determine version
         id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             echo "tag=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
@@ -47,16 +36,12 @@ jobs:
             echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Download IPK from release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p /tmp/ipk-deploy
-          gh release download "${{ steps.version.outputs.tag }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "*.ipk" \
-            --dir /tmp/ipk-deploy
-          ls -lh /tmp/ipk-deploy/
+      - uses: robinraju/release-downloader@v1.12
+        with:
+          tag: "${{ steps.version.outputs.tag }}"
+          fileName: "*.ipk"
+          out-file-path: /tmp/ipk-deploy
+          token: ${{ github.token }}
 
       - name: Deploy to OpenWrt
         env:
@@ -64,12 +49,12 @@ jobs:
           SSH_HOST: ${{ secrets.OPENWRT_HOST }}
           SSH_USER: ${{ secrets.OPENWRT_USER }}
         run: |
-          mkdir -p ~/.ssh
-          echo "${SSH_KEY}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          DEPLOY_KEY=$(mktemp)
+          echo "${SSH_KEY}" > "$DEPLOY_KEY"
+          chmod 600 "$DEPLOY_KEY"
           ssh-keyscan -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
 
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
+          SSH_OPTS="-i $DEPLOY_KEY -o StrictHostKeyChecking=accept-new"
 
           scp ${SSH_OPTS} /tmp/ipk-deploy/*.ipk "${SSH_USER}@${SSH_HOST}:/tmp/"
           ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" << 'EOF'
@@ -79,18 +64,20 @@ jobs:
             rm -f /tmp/*.ipk
           EOF
 
+          rm -f "$DEPLOY_KEY"
+
       - name: Cleanup
         if: always()
-        run: |
-          rm -rf /tmp/ipk-deploy
-          rm -f ~/.ssh/deploy_key
+        run: rm -rf /tmp/ipk-deploy
 
       - name: Send Bark notification
-        if: always()
+        if: always() && env.BARK_TOKEN != ''
+        env:
+          BARK_TOKEN: ${{ secrets.BARK_TOKEN }}
         run: |
           if [ "${{ job.status }}" = "success" ]; then
             STATUS="deployed"
           else
             STATUS="deploy_failed"
           fi
-          curl -s "https://api.day.app/${{ secrets.BARK_TOKEN }}/${{ github.repository }}+CD+${STATUS}/${{ steps.version.outputs.tag }}"
+          curl -s "https://api.day.app/${BARK_TOKEN}/${{ github.repository }}+CD+${STATUS}/${{ steps.version.outputs.tag }}"
