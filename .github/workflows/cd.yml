@@ -18,30 +18,48 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          if ! command -v jq &>/dev/null; then
+            if command -v apt-get &>/dev/null; then
+              sudo apt-get update && sudo apt-get install -y jq
+            elif command -v apk &>/dev/null; then
+              apk add --no-cache jq
+            fi
+          fi
+          if ! command -v gh &>/dev/null; then
+            if command -v apt-get &>/dev/null; then
+              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+              sudo apt-get update && sudo apt-get install -y gh
+            fi
+          fi
+
       - name: Determine version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             echo "tag=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
           elif [[ -n "${{ inputs.version }}" ]]; then
             echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            TAG=$(curl -s -H "Authorization: Bearer ${{ github.token }}" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r .tag_name)
+            TAG=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
             echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Download IPK from release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p /tmp/ipk-deploy
-          curl -s -H "Authorization: Bearer ${{ github.token }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.version.outputs.tag }}" \
-            | jq -r '.assets[] | select(.name | endswith(".ipk")) | "\(.url) \(.name)"' \
-            | while read -r url name; do
-                curl -sL -H "Authorization: Bearer ${{ github.token }}" \
-                  -H "Accept: application/octet-stream" \
-                  "$url" -o "/tmp/ipk-deploy/${name}"
-              done
+          gh release download "${{ steps.version.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.ipk" \
+            --dir /tmp/ipk-deploy
           ls -lh /tmp/ipk-deploy/
 
       - name: Deploy to OpenWrt
