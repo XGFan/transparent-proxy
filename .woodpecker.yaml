@@ -1,0 +1,48 @@
+when:
+  branch: master
+  event: push
+
+steps:
+  - name: build
+    image: golang:1.25-alpine
+    commands:
+      - apk add --no-cache nodejs npm tar fakeroot gzip bash git python3
+      - SHORT_SHA=$(echo $CI_COMMIT_SHA | cut -c1-8)
+      - bash scripts/build-openwrt-ipk.sh --version "v0.0.0-$SHORT_SHA"
+      - ls -lh dist/ipk/*/artifacts/*.ipk
+
+  - name: deploy
+    image: alpine
+    commands:
+      - apk add --no-cache openssh-client
+      - mkdir -p ~/.ssh
+      - echo "$CI_SSH_KEY" > ~/.ssh/deploy_key
+      - chmod 600 ~/.ssh/deploy_key
+      - ssh-keyscan -H "$OPENWRT_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+      - SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
+      - scp $SSH_OPTS dist/ipk/*/artifacts/*.ipk "$OPENWRT_USER@$OPENWRT_HOST:/tmp/"
+      - |
+        ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" \
+          'opkg install /tmp/transparent-proxy_*.ipk && opkg install /tmp/luci-app-transparent-proxy_*.ipk && /etc/init.d/transparent-proxy restart && rm -f /tmp/*.ipk'
+      - rm -f ~/.ssh/deploy_key
+    environment:
+      CI_SSH_KEY:
+        from_secret: ci_ssh_key
+      OPENWRT_HOST:
+        from_secret: openwrt_host
+      OPENWRT_USER:
+        from_secret: openwrt_user
+
+  - name: notify
+    image: curlimages/curl
+    failure: ignore
+    commands:
+      - |
+        TITLE=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$CI_REPO $CI_PIPELINE_STATUS'))" 2>/dev/null || echo "$CI_REPO+$CI_PIPELINE_STATUS" | tr ' ' '+')
+        BODY=$(echo "$CI_COMMIT_MESSAGE" | head -1 | python3 -c "import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip()))" 2>/dev/null || echo "$CI_COMMIT_MESSAGE" | head -1 | tr ' ' '+')
+        curl -sf "https://api.day.app/$BARK_TOKEN/$TITLE/$BODY" || true
+    environment:
+      BARK_TOKEN:
+        from_secret: bark_token
+    when:
+      - status: [success, failure]
