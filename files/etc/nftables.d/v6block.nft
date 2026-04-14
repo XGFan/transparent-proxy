@@ -5,7 +5,7 @@ chain sip6_547 {
 
 chain sip6_fwd {
     meta nfproto ipv6 ether saddr @allow_v6_mac return
-    meta nfproto ipv6 drop
+    meta nfproto ipv6 reject with icmpv6 admin-prohibited
 }
 
 chain input_lan {
