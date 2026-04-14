@@ -33,16 +33,20 @@ steps:
       OPENWRT_USER:
         from_secret: openwrt_user
 
-  - name: notify
-    image: curlimages/curl
+  - name: notify-success
+    image: docker.test4x.com/xgfan/plugin-bark
     failure: ignore
-    commands:
-      - |
-        TITLE=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$CI_REPO $CI_PIPELINE_STATUS'))" 2>/dev/null || echo "$CI_REPO+$CI_PIPELINE_STATUS" | tr ' ' '+')
-        BODY=$(echo "$CI_COMMIT_MESSAGE" | head -1 | python3 -c "import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip()))" 2>/dev/null || echo "$CI_COMMIT_MESSAGE" | head -1 | tr ' ' '+')
-        curl -sf "https://api.day.app/$BARK_TOKEN/$TITLE/$BODY" || true
-    environment:
-      BARK_TOKEN:
+    settings:
+      token:
         from_secret: bark_token
+      status: success
+
+  - name: notify-failure
+    image: docker.test4x.com/xgfan/plugin-bark
+    failure: ignore
+    settings:
+      token:
+        from_secret: bark_token
+      status: failure
     when:
-      - status: [success, failure]
+      - status: [failure]
