@@ -12,4 +12,7 @@ if [ -x "${guest_initd}" ]; then
   "${guest_initd}" restart >/dev/null 2>&1 || "${guest_initd}" start >/dev/null 2>&1 || true
 fi
 
+# Reload firewall to pick up updated nft rules in /etc/nftables.d/
+fw4 reload >/dev/null 2>&1 || true
+
 exit 0
