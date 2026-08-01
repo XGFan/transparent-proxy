@@ -27,7 +27,8 @@ steps:
       # 用独立目录 + 每次先清空：失败的 run 不会把 ipk 留给下一次，
       # 否则 opkg 的通配符会一次收到多个包(实测会段错误)。
       - ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" 'rm -rf /tmp/tp-deploy && mkdir -p /tmp/tp-deploy'
-      - scp $SSH_OPTS dist/ipk/*/artifacts/*.ipk deploy/openwrt/ci-deploy.sh "$OPENWRT_USER@$OPENWRT_HOST:/tmp/tp-deploy/"
+      # 只传服务 ipk，不传 luci-app（ADR-0005：LuCI 入口退役；luci-app 仍构建防烂）。
+      - scp $SSH_OPTS dist/ipk/*/artifacts/transparent-proxy_*.ipk deploy/openwrt/ci-deploy.sh "$OPENWRT_USER@$OPENWRT_HOST:/tmp/tp-deploy/"
       # 部署逻辑放脚本里而不是内联 ssh 一行：那一行要穿过 CI 容器 sh 与路由器
       # busybox ash 两层引号，实测会崩(opkg 段错误 / unterminated quoted string)。
       - ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" 'sh /tmp/tp-deploy/ci-deploy.sh /tmp/tp-deploy'
