@@ -8,8 +8,12 @@ steps:
     commands:
       - apk add --no-cache nodejs npm tar fakeroot gzip bash git python3
       - SHORT_SHA=$(echo $CI_COMMIT_SHA | cut -c1-8)
-      - bash scripts/build-openwrt-ipk.sh --version "v0.0.0-$SHORT_SHA"
+      # 路由器是 x86_64；脚本默认 aarch64_generic，不显式指定就会打出一个
+      # opkg 判为「no valid architecture」的包。以前 opkg 每次都拒绝安装，
+      # 这个错配从未暴露过。
+      - OPENWRT_PACKAGE_ARCH=x86_64 bash scripts/build-openwrt-ipk.sh --version "v0.0.0-$SHORT_SHA"
       - ls -lh dist/ipk/*/artifacts/*.ipk
+      - ls dist/ipk/*/artifacts/ | grep -q "_x86_64.ipk" || (echo "构建出的不是 x86_64 包" && exit 1)
 
   - name: deploy
     image: alpine
@@ -23,7 +27,7 @@ steps:
       - scp $SSH_OPTS dist/ipk/*/artifacts/*.ipk "$OPENWRT_USER@$OPENWRT_HOST:/tmp/"
       - |
         ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" \
-          'opkg install --force-reinstall --force-downgrade /tmp/transparent-proxy_*.ipk && opkg install --force-reinstall --force-downgrade /tmp/luci-app-transparent-proxy_*.ipk && /etc/init.d/transparent-proxy restart && sleep 2 && pidof transparent-proxy > /dev/null && wget -q -O /dev/null http://127.0.0.1:1444/panel.js || (echo "部署校验失败: 服务未起或 panel.js 缺失" && exit 1) && rm -f /tmp/*.ipk'
+          'set -e; opkg install --force-downgrade /tmp/transparent-proxy_*.ipk; opkg install --force-downgrade /tmp/luci-app-transparent-proxy_*.ipk; /etc/init.d/transparent-proxy restart; set +e; i=0; while [ $i -lt 30 ]; do pidof transparent-proxy >/dev/null && wget -q -O /dev/null -T 5 http://127.0.0.1:1444/panel.js && break; i=$((i+1)); sleep 3; done; rm -f /tmp/*.ipk; if [ $i -ge 30 ]; then echo "部署校验失败: 90s 内服务未就绪或 panel.js 缺失"; exit 1; fi; echo "部署校验通过"'
       - rm -f ~/.ssh/deploy_key
     environment:
       CI_SSH_KEY:
