@@ -24,13 +24,14 @@ steps:
       - chmod 600 ~/.ssh/deploy_key
       - ssh-keyscan -H "$OPENWRT_HOST" >> ~/.ssh/known_hosts 2>/dev/null
       - SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
-      # 先清干净再传：失败的 run 会把自己的 ipk 留在 /tmp，下次 opkg 的通配符
-      # 就会一次收到多个包(可能还带着历史遗留的错架构包)——实测会让 opkg 段错误。
-      - ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" 'rm -f /tmp/*.ipk'
-      - scp $SSH_OPTS dist/ipk/*/artifacts/*.ipk "$OPENWRT_USER@$OPENWRT_HOST:/tmp/"
-      - |
-        ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" \
-          'set -e; opkg install --force-downgrade /tmp/transparent-proxy_*.ipk; opkg install --force-downgrade /tmp/luci-app-transparent-proxy_*.ipk; /etc/init.d/transparent-proxy restart; set +e; i=0; while [ $i -lt 30 ]; do pidof transparent-proxy >/dev/null && wget -q -O /dev/null -T 5 http://127.0.0.1:1444/panel.js && break; i=$((i+1)); sleep 3; done; rm -f /tmp/*.ipk; if [ $i -ge 30 ]; then echo "部署校验失败: 90s 内服务未就绪或 panel.js 缺失"; exit 1; fi; echo "部署校验通过"'
+      # 用独立目录 + 每次先清空：失败的 run 不会把 ipk 留给下一次，
+      # 否则 opkg 的通配符会一次收到多个包(实测会段错误)。
+      - ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" 'rm -rf /tmp/tp-deploy && mkdir -p /tmp/tp-deploy'
+      - scp $SSH_OPTS dist/ipk/*/artifacts/*.ipk deploy/openwrt/ci-deploy.sh "$OPENWRT_USER@$OPENWRT_HOST:/tmp/tp-deploy/"
+      # 部署逻辑放脚本里而不是内联 ssh 一行：那一行要穿过 CI 容器 sh 与路由器
+      # busybox ash 两层引号，实测会崩(opkg 段错误 / unterminated quoted string)。
+      - ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" 'sh /tmp/tp-deploy/ci-deploy.sh /tmp/tp-deploy'
+      - ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" 'rm -rf /tmp/tp-deploy'
       - rm -f ~/.ssh/deploy_key
     environment:
       CI_SSH_KEY:
