@@ -24,6 +24,9 @@ steps:
       - chmod 600 ~/.ssh/deploy_key
       - ssh-keyscan -H "$OPENWRT_HOST" >> ~/.ssh/known_hosts 2>/dev/null
       - SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
+      # 先清干净再传：失败的 run 会把自己的 ipk 留在 /tmp，下次 opkg 的通配符
+      # 就会一次收到多个包(可能还带着历史遗留的错架构包)——实测会让 opkg 段错误。
+      - ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" 'rm -f /tmp/*.ipk'
       - scp $SSH_OPTS dist/ipk/*/artifacts/*.ipk "$OPENWRT_USER@$OPENWRT_HOST:/tmp/"
       - |
         ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" \
