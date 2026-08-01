@@ -155,8 +155,8 @@ build_frontend() {
     exit 6
   fi
   
-  if [[ ! -d "../server/web/assets" ]] || [[ -z "$(ls -A ../server/web/assets 2>/dev/null)" ]]; then
-    echo "错误: 前端构建输出缺失: server/web/assets" >&2
+  if [[ ! -f "../server/web/panel.js" ]]; then
+    echo "错误: 前端构建输出缺失: server/web/panel.js" >&2
     exit 7
   fi
   

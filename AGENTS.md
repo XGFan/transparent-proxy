@@ -6,7 +6,7 @@
 
 透明代理管理工具，管理 Linux nftables 规则。前后端分离架构：
 - **后端**：Go 1.22 (Gin) - nftables ipset、网络检查、OpenWrt 配置管理
-- **前端**：React 18 + TypeScript + Vite - Web UI
+- **前端**：Preact 10 + TypeScript + Vite - Web Components 面板（`<tp-card>` / `<tp-panel>`，构建成单文件 `server/web/panel.js`）
 - **测试**：三层体系（Go 单元测试 + Vitest 组件测试 + Playwright E2E）
 
 ## 构建命令
@@ -91,7 +91,7 @@ import { describe, it, expect, vi } from 'vitest';
 ```
 transparent-proxy/
 ├── server/           # Go 后端（main.go, app.go, api_*.go, *_service.go, *_test.go）
-├── portal/           # React 前端（src/app/, src/features/, src/lib/, src/test/）
+├── portal/           # Preact 前端（src/wc/, src/components/, src/lib/, src/styles/）
 ├── scripts/openwrt-vm/  # OpenWrt VM 测试脚本
 ├── files/            # 管理文件资产
 ├── docs/             # 文档

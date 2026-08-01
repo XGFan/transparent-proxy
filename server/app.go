@@ -68,12 +68,26 @@ func (app *App) Run(ctx context.Context) error {
 	// Start periodic chnroute refresh (initial data loaded in Bootstrap)
 	app.chnRoute.StartPeriodicRefresh(ctx)
 
-	// Set up HTTP server
+	if app.Config().ApiKey == "" {
+		log.Printf("**********************************************************************")
+		log.Printf("WARNING: api_key 未配置 —— /api/* 全部无鉴权。")
+		log.Printf("         同一网络里的任何人都能读写代理规则、改配置、开关代理。")
+		log.Printf("         在 %s 里设置 api_key 即可启用鉴权。", app.configPath)
+		log.Printf("**********************************************************************")
+	}
+
+	return serveHTTP(ctx, buildRouter(app), app.config.Listen)
+}
+
+// buildRouter 组装完整的 HTTP 路由（静态资源 + /panel.js + /api）。
+// 与测试共用，保证「静态开放、API 关闭」这条边界是被实际路由树验证的，而不是各拼一份。
+func buildRouter(app *App) *gin.Engine {
 	router := gin.Default()
+	// servePanelJS 必须在静态中间件之前，否则 /panel.js 会被静态中间件先行返回、拿不到 no-cache
+	router.Use(servePanelJS())
 	router.Use(static.Serve("/", static.EmbedFolder(assetData, "web")))
 	registerAPIRoutes(router.Group("/api"), app)
-
-	return serveHTTP(ctx, router, app.config.Listen)
+	return router
 }
 
 // Config returns a thread-safe copy of the current config.

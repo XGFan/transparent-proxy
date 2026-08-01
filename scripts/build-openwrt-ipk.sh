@@ -221,20 +221,41 @@ build_frontend() {
     exit 6
   fi
 
-  if [[ ! -d "../server/web/assets" ]] || [[ -z "$(ls -A ../server/web/assets 2>/dev/null)" ]]; then
-    echo "错误: 前端构建输出缺失: server/web/assets" >&2
+  if [[ ! -f "../server/web/panel.js" ]]; then
+    echo "错误: 前端构建输出缺失: server/web/panel.js" >&2
     exit 7
   fi
 
   echo "✓ 前端构建完成"
 }
 
+go_arch_for() {
+  local package_arch="$1"
+
+  case "${package_arch}" in
+    aarch64_*)        echo "arm64" ;;
+    x86_64)           echo "amd64" ;;
+    i386_*|x86)       echo "386" ;;
+    arm_*)            echo "arm" ;;
+    mipsel_*)         echo "mipsle" ;;
+    mips_*)           echo "mips" ;;
+    mips64_*)         echo "mips64" ;;
+    mips64el_*)       echo "mips64le" ;;
+    *)
+      echo "错误: 无法将包架构 '${package_arch}' 映射到 GOARCH" >&2
+      exit 13
+      ;;
+  esac
+}
+
 build_backend() {
   local output="$1"
+  local goarch
+  goarch="$(go_arch_for "${DEFAULT_PACKAGE_ARCH}")"
 
   require_command go
 
-  echo "构建后端 (linux/arm64)..."
+  echo "构建后端 (linux/${goarch}, package=${DEFAULT_PACKAGE_ARCH})..."
 
   mkdir -p "$(dirname "${output}")"
   cd "${REPO_ROOT}/server"
@@ -246,7 +267,7 @@ build_backend() {
 
   local ldflags="-s -w"
 
-  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+  CGO_ENABLED=0 GOOS=linux GOARCH="${goarch}" \
     go build -trimpath -ldflags "${ldflags}" -o "${output}" .
 
   echo "✓ 后端构建完成: ${output}"

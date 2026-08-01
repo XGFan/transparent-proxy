@@ -1,5 +1,7 @@
 version: 1
 listen: ":1444"
+# 填了才启用鉴权：非空时所有 /api/* 需带请求头 X-Api-Key（/panel.js 与静态资源不鉴权）
+# api_key: ""
 proxy:
     lan_interface: br-lan
     default_port: 1081

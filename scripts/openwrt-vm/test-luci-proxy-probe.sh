@@ -358,13 +358,13 @@ import re
 import sys
 
 content = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore")
-match = re.search(r'["\']((?:\./|/)?assets/[^"\']+\.(?:js|css)(?:\?[^"\']*)?)["\']', content)
+match = re.search(r'["\']((?:\./|/)?(?:panel\.js|assets/[^"\']+\.(?:js|css))(?:\?[^"\']*)?)["\']', content)
 print(match.group(1) if match else "")
 PY
 )"
 
   if [[ -z "${BACKEND_ASSET_PATH}" ]]; then
-    add_failure_reason '后端首页未发现 ./assets/* 或 /assets/* 静态资源引用'
+    add_failure_reason '后端首页未发现 panel.js 或 assets/* 静态资源引用'
   else
     log "解析到后端静态资源路径: ${BACKEND_ASSET_PATH}"
   fi

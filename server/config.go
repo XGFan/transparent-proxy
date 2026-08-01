@@ -18,12 +18,18 @@ const (
 	DefaultListenAddr   = ":1444"
 	DefaultNftStatePath = "/etc/nftables.d"
 	ConfigVersion       = 1
+	// configFilePerm 是**新建**配置文件的权限；配置可能含 api_key，默认不给 group/other。
+	// 已存在的文件由 writeFileAtomically 沿用其现有权限。
+	configFilePerm = 0600
 )
 
 // AppConfig is the top-level configuration.
 type AppConfig struct {
-	Version  int            `yaml:"version"`
-	Listen   string         `yaml:"listen,omitempty"`
+	Version int    `yaml:"version"`
+	Listen  string `yaml:"listen,omitempty"`
+	// ApiKey 非空时所有 /api/* 请求需带 X-Api-Key 头；留空表示不启用鉴权。
+	// 不在 /api/config 中暴露或修改，避免通过 API 泄露/清空。
+	ApiKey   string         `yaml:"api_key,omitempty"`
 	Proxy    ProxyConfig    `yaml:"proxy,omitempty"`
 	Checker  CheckerConfig  `yaml:"checker,omitempty"`
 	Nft      NftConfig      `yaml:"nft,omitempty"`
@@ -105,7 +111,7 @@ func SaveConfig(configPath string, config *AppConfig) (*AppConfig, error) {
 		return nil, fmt.Errorf("marshal normalized config: %w", err)
 	}
 
-	if err := writeFileAtomically(configPath, raw, 0644); err != nil {
+	if err := writeFileAtomically(configPath, raw, configFilePerm); err != nil {
 		return nil, err
 	}
 	return normalized, nil
@@ -261,7 +267,13 @@ func validateSetName(name string) error {
 }
 
 // writeFileAtomically writes data to a temp file, then renames to target path.
+// perm 只用于**新建**文件；目标已存在时沿用它现有的权限位——配置里含 api_key，
+// 管理员 chmod 600 之后不能被一次 UI 保存悄悄改回去。
 func writeFileAtomically(targetPath string, data []byte, perm os.FileMode) error {
+	if info, err := os.Stat(targetPath); err == nil {
+		perm = info.Mode().Perm()
+	}
+
 	dir := filepath.Dir(targetPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("create directory %s: %w", dir, err)
@@ -315,5 +327,5 @@ func EnsureDefaultConfig(configPath string) error {
 	if err != nil {
 		return fmt.Errorf("marshal default config: %w", err)
 	}
-	return writeFileAtomically(configPath, raw, 0644)
+	return writeFileAtomically(configPath, raw, configFilePerm)
 }

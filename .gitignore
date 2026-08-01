@@ -13,4 +13,5 @@ portal/tsconfig.tsbuildinfo
 .omc/
 .claude/
 dist/
-server/web/assets/*
+# 前端构建产物（portal npm run build 生成，go embed 时需存在）
+server/web/panel.js

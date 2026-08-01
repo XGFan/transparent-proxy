@@ -69,6 +69,11 @@ func decodeJSON(req *http.Request, out any) error {
 // --- Route Registration ---
 
 func registerAPIRoutes(r *gin.RouterGroup, app *App) {
+	// 鉴权对全部 /api/* 生效（含 GET）；静态资源与 /panel.js 不鉴权。
+	r.Use(apiKeyAuth(app))
+	// 写方法额外过 Content-Type / 同源兜底，挡跨站简单请求。
+	r.Use(writeGuard(app))
+
 	r.GET("/status", func(c *gin.Context) { handleStatus(c, app) })
 	r.GET("/ip", handleIP)
 	r.GET("/config", func(c *gin.Context) { handleConfigGet(c, app) })

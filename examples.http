@@ -1,90 +1,116 @@
-### status (Canonical Envelope-First)
-# 响应包含 code, message, data。data 中包含 status, ip, sets。
-GET http://192.168.2.1:1444/api/status
+@host = http://192.168.2.1:1444
+# config.yaml 里 api_key 非空时，所有 /api/* 都需要该头；留空则不鉴权。
+@apiKey = changeme
 
-### health (Canonical Health)
-GET http://192.168.2.1:1444/api/health
+### status：代理状态 + checker 状态 + 所有 set 内容
+GET {{host}}/api/status
+X-Api-Key: {{apiKey}}
 
-### rules: list (Canonical Rules)
-GET http://192.168.2.1:1444/api/rules
+### ip：返回请求方 IP（可用 ?ip= 覆盖）
+GET {{host}}/api/ip
+X-Api-Key: {{apiKey}}
 
-### rules: add (Canonical Rules)
-POST http://192.168.2.1:1444/api/rules/add
+### config：读全局配置（proxy + checker + chnroute，不含 api_key）
+GET {{host}}/api/config
+X-Api-Key: {{apiKey}}
+
+### config：写全局配置（未列出的字段会被覆盖为零值，先 GET 再整体回写）
+PUT {{host}}/api/config
 Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "listen": ":1444",
+  "proxy": {
+    "lan_interface": "br-lan",
+    "default_port": 1081,
+    "forced_port": 1082,
+    "self_mark": 255
+  },
+  "checker": {
+    "enabled": true,
+    "method": "HEAD",
+    "url": "http://www.qq.com",
+    "timeout": "10s",
+    "interval": "30s",
+    "failure_threshold": 3,
+    "on_failure": "disable"
+  },
+  "chnroute": {
+    "auto_refresh": true,
+    "refresh_interval": "168h"
+  }
+}
+
+### checker：读健康检查配置与运行状态
+GET {{host}}/api/checker
+X-Api-Key: {{apiKey}}
+
+### checker：写健康检查配置（on_failure 保持原值，不接受该字段）
+PUT {{host}}/api/checker
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "enabled": true,
+  "method": "HEAD",
+  "url": "http://www.qq.com",
+  "host": "",
+  "timeout": "10s",
+  "interval": "30s",
+  "failure_threshold": 3
+}
+
+### proxy：切换透明代理开关
+PUT {{host}}/api/proxy
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "enabled": true
+}
+
+### rules：列出所有 set 内容
+GET {{host}}/api/rules
+X-Api-Key: {{apiKey}}
+
+### rules：向 set 添加元素（IP / CIDR / 区间）
+POST {{host}}/api/rules/add
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
 
 {
   "ip": "1.2.3.4",
   "set": "proxy_src"
 }
 
-### rules: remove (Canonical Rules)
-POST http://192.168.2.1:1444/api/rules/remove
+### rules：从 set 删除元素
+POST {{host}}/api/rules/remove
 Content-Type: application/json
+X-Api-Key: {{apiKey}}
 
 {
-  "ip": "1.2.3.4/31",
-  "set": "direct_src"
+  "ip": "1.2.3.4",
+  "set": "proxy_src"
 }
 
-### rules: sync (Canonical Rules)
-POST http://192.168.2.1:1444/api/rules/sync
-
-### Retained Compatibility Endpoints (保留兼容性端点)
-
-### ip (Compatibility)
-GET http://192.168.2.1:1444/api/ip
-
-### refresh-route (Compatibility)
-POST http://192.168.2.1:1444/api/refresh-route
-
-### configs: list
-GET http://192.168.2.1:1444/api/configs
-
-### configs: get by name
-GET http://192.168.2.1:1444/api/configs/main
-
-### configs: update by name
-PUT http://192.168.2.1:1444/api/configs/main
+### rules：把所有 set 持久化到 state_path/*.nft
+# 无 body 也要带 Content-Type：写方法一律要求 application/json（挡跨站简单请求）
+POST {{host}}/api/rules/sync
 Content-Type: application/json
+X-Api-Key: {{apiKey}}
 
-{
-  "format": "yaml",
-  "content": "checker: {}\nnft:\n  sets:\n    - proxy_src\n"
-}
-
-### configs: validate by name（无效请求返回 4xx envelope）
-POST http://192.168.2.1:1444/api/configs/main/validate
+### refresh-route：立即刷新 chnroute
+POST {{host}}/api/refresh-route
 Content-Type: application/json
+X-Api-Key: {{apiKey}}
 
-{
-  "format": "yaml",
-  "content": "checker: {}\nnft:\n  sets:\n    - proxy_src\n"
-}
+### panel.js：面板 bundle（不鉴权，net-console 用它探活）
+GET {{host}}/panel.js
 
-### apply: preview
-POST http://192.168.2.1:1444/api/apply/preview
-Content-Type: application/json
-
-{}
-
-### apply: execute
-POST http://192.168.2.1:1444/api/apply/execute
-Content-Type: application/json
-
-{}
-
-### audit
-GET http://192.168.2.1:1444/api/audit
-
-### rollback
-POST http://192.168.2.1:1444/api/rollback
-Content-Type: application/json
-
-{}
-
-### 统一响应 envelope 示例
+### 统一响应 envelope
 # {
-#   "code": "ok|invalid_request|internal_error|not_implemented",
+#   "code": "ok|invalid_request|unauthorized|internal_error",
 #   "message": "...",
 #   "data": { ... }
 # }

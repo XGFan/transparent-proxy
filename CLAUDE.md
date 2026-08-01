@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Transparent proxy management tool for Linux nftables on OpenWrt routers. Two-part architecture:
 - **Go backend** (`server/`) — manages nftables IP sets, health checks, config; embeds the frontend at build time
-- **Preact frontend** (`portal/`) — status dashboard built with Vite + Preact, outputs to `server/web/`
+- **Preact frontend** (`portal/`) — Web Components 面板（`<tp-card>` / `<tp-panel>`），Vite lib 模式构建成单文件 `server/web/panel.js`
 
 ## Build & Test Commands
 
@@ -54,23 +54,32 @@ cd portal && npm start
 - **`checker.go`** — `Checker` runs periodic health checks, toggles proxy state. Supports `on_failure: disable|keep`, SOCKS5 proxy for probes, Bark push notifications on state change
 - **`chnroute.go`** — `ChnRouteManager` fetches APNIC data, generates chnroute.nft, periodic refresh
 - **`api.go`** — All Gin HTTP routes under `/api/` (status, IP lookup, config CRUD, rules CRUD, checker config, proxy toggle, rules sync, chnroute refresh)
+- **`auth.go`** — `X-Api-Key` 中间件（作用于全部 `/api/*`，`config.api_key` 为空则不鉴权）+ `writeGuard`：写方法要求 `Content-Type: application/json`（415，**配了 key 也校验**），未配 key 时另比对 Origin/Referer 同源（403）
 - **`mock.go`** — `MemoryNft` + `MemoryFileStore` + `MemoryFetcher` — mocks for DEV_MODE and tests
-- **`web.go`** — Embedded frontend assets via `embed.FS`
+- **`web.go`** — Embedded frontend assets via `embed.FS`，并把 `/panel.js` 单列为 `Cache-Control: no-cache` 路由
 - **`templates/`** — `proxy.nft.tmpl`, `transparent.nft.tmpl`, and `set.nft.tmpl` (embedded via `//go:embed`)
 
-API responses use envelope: `{"code": "ok"|"invalid_request"|"internal_error", "message": "...", "data": ...}`
+API responses use envelope: `{"code": "ok"|"invalid_request"|"unauthorized"|"internal_error", "message": "...", "data": ...}`
 
 ### Frontend (`portal/src/`)
 
-- **`main.tsx`** — Entry point, calls Preact render
-- **`App.tsx`** — Root component, renders AppShell
-- **`app/AppShell.tsx`** — App layout: header + main content area
-- **`features/status/StatusPage.tsx`** — Main dashboard: proxy toggle, rule management, settings — owns all state and callbacks
-- **`components/ProxyToggle.tsx`** — Proxy on/off switch
+按面板契约（net-console 仓库 `docs/panel-contract.md`）产出单文件自包含 ES module，注册两个 custom element。
+
+- **`panel.tsx`** — Entry point，注册 `<tp-card>` 与 `<tp-panel>`
+- **`wc/define.ts`** — custom element 基类：open shadow DOM、挂载时读 `api-base`、防重复注册
+- **`wc/styles.ts`** — 以 `?inline` 取 `styles/shadow.css` 的编译结果作为注入 shadow 的样式串
+- **`styles/shadow.css`** — 用 `@layer pico, joy` 分层引入 Pico conditional + tokens + panel.css。**必须分层**：Pico 的主题块选择器 `:host(:not([data-theme=dark]))`（0,2,0）压过 tokens 的裸 `:root,:host`（0,1,0），只调引入顺序不管用，joy 色板会失效
+- **`components/TpCard.tsx`** — card：只读摘要 + 代理开关
+- **`components/TpPanel.tsx`** — panel：代理开关、规则同步、设置、规则集（原 StatusPage 的状态与回调）
 - **`components/SettingsCard.tsx`** — Settings panel: proxy config, health check editor, CHNRoute management, Bark notifications, SOCKS5 proxy
 - **`components/RuleSets.tsx`** — IP set management (add/remove/list/sync)
-- **`lib/api/client.ts`** — Type-safe fetch wrapper with `APIError` class
+- **`components/ApiKeyForm.tsx`** — 401/403 时的面板内 key 输入界面
+- **`lib/api/client.ts`** — `createApiClient(apiBase)`，自动带 `X-Api-Key`（`localStorage['tp.apiKey']`），带 `APIError`
+- **`lib/api/ApiProvider.tsx` / `context.ts`** — 注入 client；401/403 时切到 key 输入界面，提交后重挂载重试
+- **`styles/tokens.css`** — vendor 自 net-console `assets/tokens.css`（权威版在那边，勿在此改）
 - Vite dev server proxies `/api` → `http://localhost:1444` (override via `PORTAL_API_TARGET` env var)
+
+构建产物必须是 `server/web/panel.js` 单文件 + `index.html` 宿主页，无额外 chunk、无独立 CSS（`npm run build:verify` 会卡住违规）。
 
 ### Testing approach
 
@@ -85,6 +94,7 @@ Tests use `MemoryNft` + `MemoryFileStore` mocks (no real nft/filesystem calls). 
 ```yaml
 version: 1
 listen: ":1444"
+api_key: ""               # 非空则所有 /api/* 需带 X-Api-Key；留空不鉴权
 proxy:
   lan_interface: br-lan
   default_port: 1081      # default proxy port

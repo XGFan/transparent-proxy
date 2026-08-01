@@ -2,14 +2,17 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/x-icon" href="./favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1a1a2e" />
-    <title>Proxy Portal</title>
-    <script type="module" crossorigin src="./assets/index-CWaSZQBd.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index--IBKsskh.css">
+    <title>Transparent Proxy</title>
+    <style>
+      body { margin: 0; padding: 1rem; background: #fff; }
+      @media (prefers-color-scheme: dark) { body { background: #13161e; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- standalone 宿主页：只负责加载 panel.js 并挂载 <tp-panel>（面板契约 §standalone portal） -->
+    <tp-panel api-base="/api"></tp-panel>
+    <script type="module" src="/panel.js"></script>
   </body>
 </html>

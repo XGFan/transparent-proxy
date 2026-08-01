@@ -304,12 +304,14 @@ server/
 ├── checker.go       # 415 行 — 健康检查、代理联动、Bark 通知、SOCKS5 支持
 ├── chnroute.go      # 136 行 — APNIC 数据拉取、chnroute.nft 生成、定时刷新
 ├── api.go           # 492 行 — 所有 HTTP 路由和 handler（单文件）
+├── auth.go          # 32 行  — X-Api-Key 中间件（constant-time 比较）
 ├── mock.go          # 268 行 — MemoryNft + MemoryFileStore + MemoryFetcher
-├── web.go           # 6 行   — 前端静态文件 embed.FS
+├── web.go           # 35 行  — 前端 embed.FS + /panel.js（no-cache）
 ├── config_test.go   # 234 行
 ├── nft_test.go      # 350 行
 ├── checker_test.go  # 364 行
 ├── api_test.go      # 435 行
+├── auth_test.go     # 130 行
 └── templates/
     ├── proxy.nft.tmpl        # 引用 {{.SelfMark}}, {{.ForcedPort}}, {{.DefaultPort}}
     ├── transparent.nft.tmpl  # 引用 {{.LanInterface}}
@@ -420,8 +422,34 @@ App.Run(ctx)
 所有路由注册在 `/api/` 下，响应体统一使用信封格式：
 
 ```json
-{"code": "ok"|"invalid_request"|"internal_error", "message": "...", "data": {...}}
+{"code": "ok"|"invalid_request"|"unauthorized"|"internal_error", "message": "...", "data": {...}}
 ```
+
+### 鉴权（auth.go）
+
+`config.api_key` 非空时，`apiKeyAuth` 中间件对**全部** `/api/*`（含 GET）校验请求头 `X-Api-Key`，
+用 `crypto/subtle.ConstantTimeCompare` 比较，不匹配返回 401 + `code: unauthorized`。
+`api_key` 为空（默认）时中间件直接放行，兼容旧配置。静态资源与 `/panel.js` 不经过该中间件。
+
+`api_key` 不在 `GET/PUT /api/config` 的 `editableConfig` 里，既不会被读出，也不会被配置更新清空。
+`api_key` 为空时，服务启动会在日志里打一段醒目告警。
+
+### 写方法的 CSRF 兜底（auth.go `writeGuard`）
+
+POST/PUT/PATCH/DELETE 额外过两道（形状对齐 dns-switchy 的 `guardWrite`）：
+
+1. **`Content-Type` 必须是 `application/json`**（忽略 `charset` 等参数），否则 415 + `code: unsupported_media_type`。
+   **始终生效，配了 `api_key` 也不跳过** —— 跨站「简单请求」只能把 Content-Type 设成
+   `text/plain` / `application/x-www-form-urlencoded` / `multipart/form-data`，要求 JSON 即可逼出预检，
+   而本服务不回 CORS 头。这条不能省：net-console 反代会**代为注入 api-key**，
+   所以「配了 key」挡不住经壳打过来的跨站简单请求。
+2. **未配 `api_key` 时**再比对 `Origin`（优先）/`Referer` 的 host 与请求 `Host`，不一致返回 403 + `code: forbidden`。
+   两个头都没有时放行（curl 等非浏览器客户端）。配了 key 之后不再校验同源：浏览器跨站请求
+   带不上自定义头 `X-Api-Key`，鉴权本身是更强的防护，继续卡同源反而会挡掉反代宿主。
+
+实际能被简单请求打到的只有 4 条 POST（`/rules/add`、`/rules/remove`、`/rules/sync`、`/refresh-route`；
+PUT 必定预检），但校验按方法统一加，不针对具体路径。注意 `/rules/sync` 与 `/refresh-route` 没有 body，
+调用方也必须带上 `Content-Type: application/json`。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -436,31 +464,71 @@ App.Run(ctx)
 | POST | `/api/rules/sync` | 将所有 set 持久化到文件 |
 | POST | `/api/refresh-route` | 立即刷新 chnroute |
 
+非 `/api/` 的两个入口：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/panel.js` | 面板 bundle，`Cache-Control: no-cache`，不鉴权（net-console 用它探活） |
+| GET | `/` | standalone 宿主页，加载 `/panel.js` 并挂 `<tp-panel api-base="/api">` |
+
+`/panel.js` 由 `servePanelJS()` 中间件处理，必须注册在 `static.Serve` 之前，否则静态中间件会先命中该文件、拿不到 no-cache 头。
+
 ---
 
 ## 前端
 
-框架：Preact 10（单一 `preact` 依赖），hooks 从 `preact/hooks` 导入。Vite 构建产物输出到 `server/web/`，由 Go 二进制通过 `embed.FS` 嵌入。开发时 Vite dev server（:3000）将 `/api` 代理到 `:1444`。
+框架：Preact 10（单一 `preact` 依赖），hooks 从 `preact/hooks` 导入。按面板契约（net-console 仓库
+`docs/panel-contract.md`）用 Vite lib 模式构建成**单文件自包含 ES module** `server/web/panel.js`，
+由 Go 二进制通过 `embed.FS` 嵌入。开发时 Vite dev server（:3000）将 `/api` 代理到 `:1444`。
+
+注册两个 custom element：
+
+| 元素 | 内容 |
+|------|------|
+| `<tp-card>` | 只读摘要（代理状态、checker 状态、规则条数）+ 代理开关这一个高频操作 |
+| `<tp-panel>` | 全部管理能力：status / rules / checker / config |
+
+两者都是 open shadow DOM，样式全部内联进 shadow（Pico v2 **conditional** 构建，作用域 `.pico` 容器，
+无 `:root`/`body` 全局选择器；叠 vendored `tokens.css` 与组件自有 `panel.css`，用 `?inline` 导入避免产出独立 CSS）。
+
+**样式必须分层，不能靠引入顺序**（`styles/shadow.css`）：Pico v2.1.1 把颜色变量定义在
+`:host(:not([data-theme=dark]))`（特异性 0,2,0），而 `tokens.css` 的 `--pico-*` 映射写在裸 `:root,:host`（0,1,0），
+无论谁先谁后都被压住，表现为主按钮/开关是 Pico 默认 azure 而非 `--joy-accent`。
+解法是 `@layer pico, joy` 把 Pico 压进低层——层序优先于特异性。
+不选「把映射挪到 `.pico` 容器」的原因：Pico 有 9 个变量的值是 `var(--pico-primary*)`
+（`primary-border`、`switch-checked-background-color`、`form-element-focus-color` 等），
+它们在 `:host` 上就完成了变量代入，只覆盖容器的话背景色变了但边框/开关/聚焦圈仍是 azure。
+（见 net-console `docs/panel-contract.md`「特异性陷阱」。）
+`api-base` 在 `connectedCallback` 读取一次；`customElements.get()` 守卫防重复注册。
+
+鉴权：请求自动带 `localStorage['tp.apiKey']` 作为 `X-Api-Key`；收到 401/403 时 `ApiProvider` 改渲染
+key 输入界面，提交后写 localStorage 并重挂载子树重试。console 宿主下反代在服务端注入 key，该逻辑自然休眠。
 
 ```
 portal/src/
-├── main.tsx                          # 5 行  — 挂载入口
-├── App.tsx                           # 5 行  — 根组件
-├── app/
-│   ├── AppShell.tsx                  # 21 行 — 布局容器
-│   └── AppShell.css                  # 59 行
-├── features/
-│   └── status/
-│       ├── StatusPage.tsx            # 148 行 — 主状态页
-│       └── StatusPage.css            # 793 行
+├── panel.tsx                         # 入口 — 注册 <tp-card> / <tp-panel>
+├── wc/
+│   ├── define.ts                     # custom element 基类（shadow + api-base + preact 挂载）
+│   └── styles.ts                     # 取 shadow.css 的编译结果作为注入串
+├── styles/
+│   ├── shadow.css                    # @layer pico, joy —— 分层引入下面三者
+│   ├── tokens.css                    # vendor 自 net-console（权威版在那边）
+│   └── panel.css                     # 组件自有样式
 ├── components/
-│   ├── ProxyToggle.tsx               # 31 行  — 代理开关
-│   ├── SettingsCard.tsx              # 244 行 — checker 配置编辑器
-│   └── RuleSets.tsx                  # 95 行  — IP set 管理
+│   ├── TpCard.tsx                    # card 内容
+│   ├── TpPanel.tsx                   # panel 内容（原 StatusPage）
+│   ├── ProxyToggle.tsx               # 代理开关
+│   ├── SettingsCard.tsx              # 配置编辑器
+│   ├── RuleSets.tsx                  # IP set 管理
+│   ├── ApiKeyForm.tsx                # 401/403 时的 key 输入界面
+│   └── status.ts                     # 状态徽标文案
 ├── lib/
+│   ├── useStatus.ts                  # /status 拉取与刷新
 │   └── api/
-│       └── client.ts                 # 227 行 — 类型安全 fetch 封装，APIError 类
-└── index.css                         # 12 行
+│       ├── client.ts                 # createApiClient(apiBase)，APIError，key 存取
+│       ├── context.ts                # ApiContext + useApi
+│       └── ApiProvider.tsx           # 注入 client + 401 门禁
+└── test/setup.ts                     # vitest：补内存版 localStorage
 ```
 
 ---
@@ -472,6 +540,7 @@ portal/src/
 ```yaml
 version: 1
 listen: ":1444"
+api_key: ""              # 非空则所有 /api/* 需带 X-Api-Key；留空不鉴权
 proxy:
   lan_interface: br-lan
   default_port: 1081
@@ -496,6 +565,9 @@ chnroute:
 ```
 
 `SaveConfig` 写入前先 round-trip 验证（marshal -> parse -> validate），然后原子 rename 写文件。
+
+文件权限：**新建**配置用 0600（配置含 `api_key`，不给 group/other）；目标文件已存在时
+`writeFileAtomically` 沿用它现有的权限位 —— 管理员 `chmod 600` 之后，一次 UI 保存不能把它悄悄改回 0644。
 
 ---
 

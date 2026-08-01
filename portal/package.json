@@ -7,7 +7,7 @@
     "start": "vite --host 127.0.0.1 --port 3000",
     "dev": "vite",
     "build": "tsc -b && vite build && npm run build:verify",
-    "build:verify": "node --input-type=module -e \"import { existsSync, readdirSync } from 'node:fs'; import path from 'node:path'; const webRoot = path.resolve(process.cwd(), '../server/web'); if (!existsSync(path.join(webRoot, 'index.html'))) { throw new Error('missing embedded frontend entrypoint at server/web/index.html'); } const assetsDir = path.join(webRoot, 'assets'); if (!existsSync(assetsDir) || readdirSync(assetsDir).length === 0) { throw new Error('missing embedded frontend assets in server/web/assets'); }\"",
+    "build:verify": "node scripts/verify-build.mjs",
     "preview": "vite preview",
     "test": "node scripts/test-compat.mjs",
     "test:component": "vitest run",
@@ -15,6 +15,7 @@
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@picocss/pico": "^2.1.1",
     "preact": "^10.25.4"
   },
   "devDependencies": {

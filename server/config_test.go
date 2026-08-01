@@ -224,6 +224,52 @@ func TestEnsureDefaultConfig_CreatesAtDefaultPath(t *testing.T) {
 	}
 }
 
+// 配置里含 api_key：管理员 chmod 600 之后，UI 保存不能把权限放回 0644。
+func TestSaveConfig_PreservesExistingFileMode(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	config := BuildDefaultConfig()
+	config.ApiKey = "s3cret"
+
+	if _, err := SaveConfig(configPath, config); err != nil {
+		t.Fatalf("SaveConfig (create): %v", err)
+	}
+
+	// 新建的配置默认不给 group/other
+	info, err := os.Stat(configPath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Errorf("新建配置权限 = %04o, want 0600", got)
+	}
+
+	// 管理员放宽或收紧之后，再保存必须保持原样
+	for _, mode := range []os.FileMode{0600, 0640, 0644} {
+		if err := os.Chmod(configPath, mode); err != nil {
+			t.Fatalf("chmod %04o: %v", mode, err)
+		}
+		if _, err := SaveConfig(configPath, config); err != nil {
+			t.Fatalf("SaveConfig (overwrite): %v", err)
+		}
+		info, err := os.Stat(configPath)
+		if err != nil {
+			t.Fatalf("stat: %v", err)
+		}
+		if got := info.Mode().Perm(); got != mode {
+			t.Errorf("保存后权限 = %04o, want %04o（应沿用已有权限）", got, mode)
+		}
+	}
+
+	// 保存后 api_key 仍在文件里
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(raw), "s3cret") {
+		t.Error("保存后 api_key 丢失")
+	}
+}
+
 func mustMarshal(t *testing.T, v any) []byte {
 	t.Helper()
 	raw, err := yaml.Marshal(v)

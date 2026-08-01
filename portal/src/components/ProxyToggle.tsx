@@ -1,4 +1,5 @@
 import type { StatusData } from '../lib/api/client';
+import { proxyStatusText } from './status';
 
 interface ProxyToggleProps {
   proxy: StatusData['proxy'] | undefined;
@@ -8,24 +9,22 @@ interface ProxyToggleProps {
 
 export function ProxyToggle({ proxy, updating, onToggle }: ProxyToggleProps) {
   return (
-    <div className="header-left">
-      <label className="proxy-switch proxy-toggle-combined proxy-toggle-inline" htmlFor="proxy-toggle-input">
-        <span className="proxy-inline-name">透明代理</span>
+    <div className="switch-row">
+      <label>
         <input
-          id="proxy-toggle-input"
           type="checkbox"
+          role="switch"
           aria-label="透明代理开关"
           checked={proxy?.enabled ?? false}
-          onChange={event => onToggle((event.target as HTMLInputElement).checked)}
           disabled={updating}
+          onChange={event => onToggle((event.target as HTMLInputElement).checked)}
         />
-        <span className="proxy-switch-slider" aria-hidden="true" />
-        <span className={`proxy-switch-label ${proxy?.enabled ? 'status-enabled' : 'status-disabled'}`}>
-          {proxy?.status === 'running' ? '已启动' :
-            proxy?.status === 'stopped' ? '已停止' : '状态未知'}
-        </span>
+        <span>透明代理</span>
       </label>
-      {updating && <span className="proxy-updating">切换中...</span>}
+      <span className={`badge ${proxy?.enabled ? 'badge-ok' : 'badge-warn'}`}>
+        {proxyStatusText(proxy)}
+      </span>
+      {updating && <span className="muted">切换中...</span>}
     </div>
   );
 }

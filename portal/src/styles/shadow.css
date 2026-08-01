@@ -1,0 +1,19 @@
+/* 注入 shadow root 的完整样式表（由 wc/styles.ts 以 ?inline 取字符串）。
+ *
+ * **靠级联层分层，而不是靠拼接顺序。** Pico v2.1.1 把颜色变量定义在
+ * :host(:not([data-theme=dark]))（特异性 0,2,0），tokens.css 的裸 :root,:host 映射是
+ * (0,1,0)，无论谁先谁后都被压住 —— 表现为主按钮是 Pico 默认 azure 而非 --joy-accent。
+ * 层序压过特异性，所以把 Pico 放进低层 pico、joy 的东西放进高层 joy 即可。
+ *
+ * 选层而不选「把映射挪到 .pico 容器」的原因：Pico 有 9 个变量的值是
+ * var(--pico-primary*)（primary-border、switch-checked-background-color、
+ * form-element-focus-color …），它们在 :host 上就完成了代入；只覆盖容器的话
+ * 背景色变了、边框/开关/聚焦圈还是 azure。压层能让整条派生链一起跟着走，
+ * 且 Pico 以后新增派生变量也不用回来补名单。
+ *
+ * 详见 net-console docs/panel-contract.md「特异性陷阱」。 */
+@layer pico, joy;
+
+@import '@picocss/pico/css/pico.conditional.min.css' layer(pico);
+@import './tokens.css' layer(joy);
+@import './panel.css' layer(joy);

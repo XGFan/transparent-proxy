@@ -1,0 +1,25 @@
+/* joy design tokens — 权威版在 net-console/assets/tokens.css。
+ * 各组件仓库 vendor 复制本文件，勿加组件私有样式；改动后手动同步四处。
+ * 注意：下面的 --pico-* 映射写在裸 :root,:host（特异性 0,1,0），会被 Pico v2 主题块
+ * :host(:not([data-theme=dark]))（0,2,0）压住——必须配合 @layer（Pico 入低层）或把映射
+ * 复制到 .pico 容器上才生效，详见 net-console docs/panel-contract.md「特异性陷阱」。 */
+:root,
+:host {
+  --joy-font: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --joy-radius: 6px;
+
+  --joy-accent: #5e81ac;
+  --joy-accent-hover: #81a1c1;
+
+  --joy-ok: #a3be8c;
+  --joy-warn: #ebcb8b;
+  --joy-err: #bf616a;
+
+  /* 映射到 Pico v2 变量 */
+  --pico-font-family: var(--joy-font);
+  --pico-border-radius: var(--joy-radius);
+  --pico-primary: var(--joy-accent);
+  --pico-primary-hover: var(--joy-accent-hover);
+  --pico-primary-background: var(--joy-accent);
+  --pico-primary-hover-background: var(--joy-accent-hover);
+}

@@ -1,0 +1,253 @@
+/* 组件自有样式，全部注入 shadow root。
+ * Pico 用 conditional 构建（作用域 .pico），它不给 .pico 容器本身设基础排版，这里补齐。 */
+
+:host {
+  display: block;
+}
+
+.pico {
+  /* --pico-* 的 joy 映射由 tokens.css 在 :host 上完成，靠 shadow.css 的 @layer 压过 Pico
+   * 主题块的特异性（见 shadow.css 注释）。这里只补 Pico 不从 primary 派生的两个残留：
+   * 不显式映射的话，链接下划线和聚焦圈会留在 azure。 */
+  --pico-primary-underline: color-mix(in srgb, var(--joy-accent) 50%, transparent);
+  --pico-primary-focus: color-mix(in srgb, var(--joy-accent) 40%, transparent);
+
+  font-family: var(--joy-font, system-ui, sans-serif);
+  font-size: 0.9rem;
+  line-height: var(--pico-line-height, 1.5);
+  color: var(--pico-color);
+  background-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+.pico * {
+  box-sizing: border-box;
+}
+
+.pico article {
+  margin: 0 0 1rem;
+  padding: 1rem;
+}
+
+.pico article > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: -1rem -1rem 1rem;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+}
+
+.pico h1,
+.pico h2,
+.pico h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* 表单在面板里走紧凑排版 */
+.pico input,
+.pico select,
+.pico button {
+  margin-bottom: 0;
+}
+
+.pico label {
+  display: block;
+}
+
+/* --- 状态标记 --- */
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--joy-radius, 6px);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #1c1c1c;
+  background: var(--pico-muted-border-color);
+}
+
+.badge-ok {
+  background: var(--joy-ok, #a3be8c);
+}
+
+.badge-warn {
+  background: var(--joy-warn, #ebcb8b);
+}
+
+.badge-err {
+  background: var(--joy-err, #bf616a);
+  color: #fff;
+}
+
+/* --- 键值摘要（card） --- */
+
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.75rem;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  list-style: none;
+}
+
+/* Pico 给 li 加了自己的 marker，grid 布局下会渲染成多余的小方块 */
+.kv li,
+.rule-list li {
+  list-style: none;
+}
+
+.kv li::marker,
+.rule-list li::marker {
+  content: none;
+}
+
+.kv .kv-key {
+  color: var(--pico-muted-color);
+}
+
+.kv .kv-val {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* --- 开关 --- */
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.switch-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+/* --- 面板布局 --- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.toolbar .actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.toolbar button {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 0.85rem;
+}
+
+/* 前缀 .pico 是为了压过上面的 .pico label{display:block} */
+.pico .field {
+  display: grid;
+  grid-template-columns: minmax(5rem, 6.5rem) 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.pico .field > span:first-child {
+  color: var(--pico-muted-color);
+}
+
+.pico .field input,
+.pico .field select {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.82rem;
+  height: auto;
+}
+
+/* --- 规则集 --- */
+
+.rule-list {
+  margin: 0.5rem 0;
+  padding: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.rule-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.rule-list button {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.72rem;
+}
+
+.rule-add {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.rule-add input {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  height: auto;
+}
+
+.rule-add button {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--pico-muted-color);
+  font-size: 0.8rem;
+}
+
+/* --- 提示条 --- */
+
+.notice {
+  margin-bottom: 0.85rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--joy-radius, 6px);
+  font-size: 0.82rem;
+  background: var(--pico-code-background-color);
+}
+
+.notice-ok {
+  border-left: 3px solid var(--joy-ok, #a3be8c);
+}
+
+.notice-err {
+  border-left: 3px solid var(--joy-err, #bf616a);
+}
+
+.tp-authgate {
+  max-width: 24rem;
+}
+
+.tp-authgate button {
+  margin-top: 0.75rem;
+  width: 100%;
+}
