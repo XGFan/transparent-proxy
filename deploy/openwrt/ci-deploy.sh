@@ -36,6 +36,9 @@ fail() {
 svc_ipk=$(ls "$IPK_DIR"/transparent-proxy_*.ipk 2>/dev/null | head -n1)
 [ -n "$svc_ipk" ] || { echo "部署失败: 找不到 transparent-proxy ipk" >&2; exit 1; }
 
+# lastgood 在 /mnt/ext 上;它没挂载时装上去的回滚目标会写进只剩 ~8M 的根分区。
+grep -q " /mnt/ext " /proc/mounts || { echo "部署失败: /mnt/ext 未挂载,拒绝安装" >&2; exit 1; }
+
 HAVE_PREV=0
 [ -f "$LASTGOOD" ] && HAVE_PREV=1
 
@@ -66,11 +69,15 @@ done
 
 # 再带 key 探一次 /api/status：panel.js 只证明前端在,这条证明「配置(含 api_key)
 # 加载成功」。key 从路由器现网配置取(设备状态,CI 没有也不该有)。
-api_key=$(sed -n 's/^[[:space:]]*api_key:[[:space:]]*//p' "$CFG" 2>/dev/null | tr -d '"' | head -n1)
-if [ -n "$api_key" ]; then
-    wget -q -O /dev/null -T 5 --header="X-Api-Key: $api_key" http://127.0.0.1:1444/api/status \
-        || fail "API 不应答或拒绝了 api_key(配置可能没加载成功)"
-fi
+#
+# key 取不到必须硬失败而不是降级:ADR-0003 增补把「生产组件必须有凭证」立为不变量,
+# 空 key 意味着配置丢了/被 -opkg 默认值顶掉了 —— 而一个无鉴权组件对任何探测都 200,
+# 降级放行等于把「凭证失效」标记成「部署成功」并存进 lastgood。
+# sed 锚死行首:api_key 是顶层字段,宽松匹配会在配置嵌套后取错值。
+api_key=$(sed -n 's/^api_key:[[:space:]]*//p' "$CFG" 2>/dev/null | tr -d '"' | head -n1)
+[ -n "$api_key" ] || fail "配置里没有 api_key(ADR-0003 增补:生产组件必须有凭证)"
+wget -q -O /dev/null -T 5 --header="X-Api-Key: $api_key" http://127.0.0.1:1444/api/status \
+    || fail "API 不应答或拒绝了 api_key(配置可能没加载成功)"
 
 # 只有验证全过的 ipk 才有资格当回滚目标。
 mkdir -p "$LASTGOOD_DIR"
