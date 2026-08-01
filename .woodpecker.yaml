@@ -23,7 +23,7 @@ steps:
       - scp $SSH_OPTS dist/ipk/*/artifacts/*.ipk "$OPENWRT_USER@$OPENWRT_HOST:/tmp/"
       - |
         ssh $SSH_OPTS "$OPENWRT_USER@$OPENWRT_HOST" \
-          'opkg install /tmp/transparent-proxy_*.ipk && opkg install /tmp/luci-app-transparent-proxy_*.ipk && /etc/init.d/transparent-proxy restart && rm -f /tmp/*.ipk'
+          'opkg install --force-reinstall --force-downgrade /tmp/transparent-proxy_*.ipk && opkg install --force-reinstall --force-downgrade /tmp/luci-app-transparent-proxy_*.ipk && /etc/init.d/transparent-proxy restart && sleep 2 && pidof transparent-proxy > /dev/null && wget -q -O /dev/null http://127.0.0.1:1444/panel.js || (echo "部署校验失败: 服务未起或 panel.js 缺失" && exit 1) && rm -f /tmp/*.ipk'
       - rm -f ~/.ssh/deploy_key
     environment:
       CI_SSH_KEY:
