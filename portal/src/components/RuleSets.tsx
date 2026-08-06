@@ -18,8 +18,11 @@ interface RuleSetsProps {
 
 export function RuleSets({ rules, drafts, feedback, onDraftChange, onAdd, onRemove, onClearFeedback }: RuleSetsProps) {
   return (
-    <article>
-      <header>规则集</header>
+    // 区块直接排在页面上，不套外层大卡（§6）；每个 set 一张子卡。
+    <section className="section">
+      <div className="section-head">
+        <h2 className="section-title">规则集</h2>
+      </div>
 
       {(feedback.loading || feedback.error || feedback.success) && (
         <div className={`notice ${feedback.error ? 'notice-err' : feedback.success ? 'notice-ok' : ''}`}>
@@ -27,7 +30,7 @@ export function RuleSets({ rules, drafts, feedback, onDraftChange, onAdd, onRemo
           {feedback.error && <span>{feedback.error}</span>}
           {feedback.success && <span>{feedback.success}</span>}
           {!feedback.loading && (
-            <button type="button" className="secondary outline" onClick={onClearFeedback} aria-label="关闭">×</button>
+            <button type="button" className="secondary outline btn-inline" onClick={onClearFeedback} aria-label="关闭">×</button>
           )}
         </div>
       )}
@@ -37,21 +40,25 @@ export function RuleSets({ rules, drafts, feedback, onDraftChange, onAdd, onRemo
           <article key={set.name}>
             <header>
               <span>{set.name}</span>
-              <span className="muted">{set.type || '未知类型'} · {set.elems?.length ?? 0}</span>
+              <span className="head-note">
+                <span className="badge">{set.type || '未知类型'}</span>
+                {set.elems?.length ?? 0} 条
+              </span>
             </header>
 
             {set.error ? (
-              <p className="muted">{set.error}</p>
+              <div className="notice notice-err">{set.error}</div>
             ) : (
               <>
                 {set.elems && set.elems.length > 0 ? (
                   <ul className="rule-list">
                     {set.elems.map((elem, idx) => (
                       <li key={`${set.name}-${elem}-${idx}`}>
-                        <span>{elem}</span>
+                        {/* IP / CIDR 是数据标识，走 code 样式（§3/§9） */}
+                        <span className="code">{elem}</span>
                         <button
                           type="button"
-                          className="secondary outline"
+                          className="outline btn-danger"
                           onClick={() => onRemove(set.name, elem)}
                           disabled={feedback.loading}
                           aria-label={`删除规则 ${elem}`}
@@ -62,9 +69,14 @@ export function RuleSets({ rules, drafts, feedback, onDraftChange, onAdd, onRemo
                     ))}
                   </ul>
                 ) : (
-                  <p className="muted">暂无规则</p>
+                  <div className="empty">
+                    <p>暂无规则</p>
+                    <p>在下方填入 IP / CIDR 后添加一条</p>
+                  </div>
                 )}
 
+                {/* 顶标签（§10）：placeholder 只说格式，不能当标签用 */}
+                <label className="rule-add-label">添加规则</label>
                 <div className="rule-add">
                   <input
                     type="text"
@@ -87,6 +99,6 @@ export function RuleSets({ rules, drafts, feedback, onDraftChange, onAdd, onRemo
           </article>
         ))}
       </div>
-    </article>
+    </section>
   );
 }

@@ -1,8 +1,20 @@
 /* 组件自有样式，全部注入 shadow root。
- * Pico 用 conditional 构建（作用域 .pico），它不给 .pico 容器本身设基础排版，这里补齐。 */
+ * Pico 用 conditional 构建（作用域 .pico），它不给 .pico 容器本身设基础排版，这里补齐。
+ *
+ * 版式一律按 net-console/docs/visual-language.md 的刻度来：页面骨架（§5）、区块（§6）、
+ * 两档控件（§7）、徽章（§9）、表单（§10）、列表（§11）、状态呈现（§12）。
+ * 尺寸用 rem 而不是 em —— rem 锚定宿主文档根，:host 又被钉成 1rem，所以 rem 值就是
+ * 规范里那套「相对宿主 1em」的刻度；写 em 会被下面 .pico 的 0.9rem 再乘一次。 */
 
 :host {
   display: block;
+  /* Pico 在 :where(:host) 铺 --pico-background-color，与壳卡片底色并不相同（暗色下露出一条色斑）。
+   * 底色一律由宿主提供：壳给卡片、standalone 页 body 自带（见面板契约「卡片视觉基准 → 宿主底色透明」）。 */
+  background: transparent;
+  /* 抵消 Pico 写在 :host 上的响应式字号（宿主页已放大的基准上再乘 125%），见面板契约
+   * 「卡片视觉基准 → 基字号归一」。下面 .pico 的 0.9rem 锚定文档根，观感不受此行影响，
+   * 这行管住的是 .pico 之外继承字号的元素与未来的新增内容。 */
+  font-size: 1rem;
 }
 
 .pico {
@@ -11,6 +23,8 @@
    * 不显式映射的话，链接下划线和聚焦圈会留在 azure。 */
   --pico-primary-underline: color-mix(in srgb, var(--joy-accent) 50%, transparent);
   --pico-primary-focus: color-mix(in srgb, var(--joy-accent) 40%, transparent);
+
+  --mono: var(--pico-font-family-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
 
   font-family: var(--joy-font, system-ui, sans-serif);
   font-size: 0.9rem;
@@ -24,20 +38,137 @@
   box-sizing: border-box;
 }
 
-.pico article {
-  margin: 0 0 1rem;
+/* ── 页面骨架（§5）──
+ * 内容列 72rem 居中、两侧最小 1rem；壳内与 standalone 同一份（standalone 宿主页只画页头，
+ * 不再自己定宽、也不再自己加 body 内边距）。卡片不参与——它的宽度由壳的格子决定。 */
+.panel {
+  max-width: 72rem;
+  margin-inline: auto;
   padding: 1rem;
 }
 
+/* ── 区块（§6）──
+ * 面板由若干区块纵向排列构成，**没有整页大卡壳**：区块头是一行 space-between
+ * （左标题、右徽章/动作），下缘一条 1px 分隔线，内容直接排在页面上。 */
+.section {
+  margin-bottom: 2rem;
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+/* 区块头与子卡头同一形态。子卡头用 Pico 的 <article> > <header>：Pico 默认给它铺 sectioning
+ * 底色，再配左右负 margin 出血到卡片边缘，就成了横贯整行的灰色带；这里一并改成透明底 + 细分隔线。 */
+.section-head,
 .pico article > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin: -1rem -1rem 1rem;
-  padding: 0.6rem 1rem;
+  margin: 0 0 0.75rem;
+  padding: 0 0 0.5rem;
+  background: transparent;
+  border-bottom: 1px solid var(--pico-muted-border-color);
   font-weight: 600;
+}
+
+.pico .section-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* 区块头右侧：状态徽章 + 至多两个动作按钮。 */
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* 区块头右侧的说明文字（类型、条数这类计数） */
+.head-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--pico-muted-color);
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+/* 子卡：§6 允许的**唯一一级**带框容器，白底 + 1px muted 边 + joy 圆角 + 1em 内边距。
+ * Pico 的 article 默认是投影卡（box-shadow + 下外边距），在区块里并排会显得比区块本身还重，
+ * 这里换成描边。子卡内部不得再出现带框容器。 */
+.pico article {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--joy-radius, 6px);
+  background: var(--pico-card-background-color);
+  box-shadow: none;
+}
+
+/* 子卡网格：设置分组、规则集各占一格。
+ * align-items:start 是要紧的——grid 默认拉伸同行子卡到最高那张的高度，
+ * 「代理设置」跟着「健康检查」长出半屏空白，数据密集页最忌这个。 */
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+/* --- 按钮两档（§7） ---
+ *
+ * 面板里的按钮只有两种尺度，且**以「所有 button 默认动作档」兜底**，不靠逐个挂 class：
+ * 曾经同一面板长出四种高度（裸 Pico 默认 62px / .toolbar 40px / .rule-add 38px / .rule-list 28px），
+ * 根因就是三套 padding 按位置各自为政，漏一个位置就多一档。现在只有下面这一处定尺寸，
+ * 新加的按钮不写任何 class 也自动是动作档，不会长回 Pico 的 62px。
+ *   动作档（默认）—— 区块头与表单上的动作：编辑、取消、保存、拉取、刷新、同步规则、添加、重试
+ *   行内档 —— 列表行内的小动作：规则列表里的删除、提示条的关闭
+ * 高度用 rem（锚定文档根，与「基字号归一」同一套尺度），同档零像素差；
+ * inline-flex + line-height:1 让高度只由 height 决定，不被字号、aria-busy 的转圈图标带偏。 */
+.pico button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  margin: 0;
+  height: 1.7rem;
+  padding: 0 0.85em;
+  border-radius: var(--joy-radius, 6px);
+  font-size: 0.85rem;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+/* 行内档：比动作档再小一号 */
+.pico .rule-list button,
+.pico .btn-inline {
+  height: 1.4rem;
+  padding: 0 0.7em;
+  font-size: 0.78rem;
+}
+
+/* 危险动作：err 描边，悬停才实心白字（§7）。删除类按钮用它，不用实心红。 */
+.pico .btn-danger {
+  background: transparent;
+  border-color: var(--joy-err, #bf616a);
+  color: var(--joy-err, #bf616a);
+}
+
+.pico .btn-danger:hover,
+.pico .btn-danger:focus {
+  background: var(--joy-err, #bf616a);
+  border-color: var(--joy-err, #bf616a);
+  color: #fff;
 }
 
 .pico h1,
@@ -54,21 +185,43 @@
   margin-bottom: 0;
 }
 
+/* 输入框/下拉与动作档等高，同一 flex 行里不许参差（§7）。
+ * 只点名文本类控件：勾选框（role=switch）要走 Pico 原样，被钉死高度会塌成一条。 */
+.pico input[type='text'],
+.pico input[type='password'],
+.pico input[type='number'],
+.pico select {
+  height: 1.7rem;
+  padding: 0 0.5em;
+  font-size: 0.85rem;
+}
+
 .pico label {
   display: block;
 }
 
-/* --- 状态标记 --- */
+/* --- 状态标记（§9） --- */
 
+/* 中性徽章：标识与计数，透明底 + muted 描边 */
 .badge {
   display: inline-block;
-  padding: 0.1rem 0.5rem;
+  padding: 0.1rem 0.45rem;
   border-radius: var(--joy-radius, 6px);
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 500;
   white-space: nowrap;
+  border: 1px solid var(--pico-muted-border-color);
+  color: var(--pico-muted-color);
+  background: transparent;
+}
+
+/* 状态徽章：底色即状态，ok/warn 深字、err 白字 */
+.badge-ok,
+.badge-warn,
+.badge-err {
+  border-color: transparent;
+  font-weight: 600;
   color: #1c1c1c;
-  background: var(--pico-muted-border-color);
 }
 
 .badge-ok {
@@ -84,13 +237,28 @@
   color: #fff;
 }
 
+.badge.mono {
+  font-family: var(--mono);
+}
+
+/* --- 数据标识（§3/§9）：IP、端口、接口名一律 code 样式 --- */
+
+.code {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--joy-radius, 6px);
+  background: var(--pico-code-background-color);
+  overflow-wrap: anywhere;
+}
+
 /* --- 键值摘要（card） --- */
 
 .kv {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.35rem 0.75rem;
-  margin: 0 0 0.85rem;
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 0.75rem;
   padding: 0;
   list-style: none;
 }
@@ -120,7 +288,7 @@
 .switch-row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
@@ -131,31 +299,15 @@
   margin: 0;
 }
 
-/* --- 面板布局 --- */
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+/* 首个区块的头部左侧**就是**代理开关本体：开关旁的文字即这一块的区块标题
+ * （§6 区块头一行 space-between），所以只在区块头里给它标题的字号字重；
+ * 卡片里的同一组件保持正文字号。 */
+.section-head .switch-row label span {
+  font-size: 1rem;
+  font-weight: 600;
 }
 
-.toolbar .actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.toolbar button {
-  padding: 0.35rem 0.8rem;
-  font-size: 0.8rem;
-}
-
-.grid-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-  gap: 0.85rem;
-}
+/* --- 表单（§10）：左标签网格，密集设置组用 --- */
 
 /* 前缀 .pico 是为了压过上面的 .pico label{display:block} */
 .pico .field {
@@ -164,21 +316,21 @@
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
 }
 
 .pico .field > span:first-child {
   color: var(--pico-muted-color);
 }
 
-.pico .field input,
+/* 值是接口名 / 端口 / URL / 时长这类数据标识，等宽字更好对齐扫读（§3） */
+.pico .field input[type='text'],
+.pico .field input[type='number'],
 .pico .field select {
-  padding: 0.3rem 0.5rem;
-  font-size: 0.82rem;
-  height: auto;
+  font-family: var(--mono);
 }
 
-/* --- 规则集 --- */
+/* --- 规则集（§11 列表） --- */
 
 .rule-list {
   margin: 0.5rem 0;
@@ -193,61 +345,94 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.2rem 0;
-  font-size: 0.8rem;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.85rem;
   border-bottom: 1px solid var(--pico-muted-border-color);
+  transition: background-color 0.15s ease;
 }
 
-.rule-list button {
-  padding: 0.1rem 0.45rem;
-  font-size: 0.72rem;
+.rule-list li:hover {
+  background: var(--pico-secondary-background);
+}
+
+.pico .rule-add-label {
+  margin-bottom: 0.25rem;
+  color: var(--pico-muted-color);
+  font-size: 0.85rem;
 }
 
 .rule-add {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
-.rule-add input {
-  padding: 0.3rem 0.5rem;
-  font-size: 0.8rem;
-  height: auto;
-}
-
-.rule-add button {
-  padding: 0.3rem 0.7rem;
-  font-size: 0.8rem;
-  white-space: nowrap;
+.pico .rule-add input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
 }
 
 .muted {
   color: var(--pico-muted-color);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
 }
 
-/* --- 提示条 --- */
+/* --- 提示条（§12） --- */
 
 .notice {
-  margin-bottom: 0.85rem;
-  padding: 0.45rem 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--joy-radius, 6px);
-  font-size: 0.82rem;
+  border-left: 3px solid var(--pico-muted-border-color);
+  font-size: 0.85rem;
   background: var(--pico-code-background-color);
 }
 
 .notice-ok {
-  border-left: 3px solid var(--joy-ok, #a3be8c);
+  border-left-color: var(--joy-ok, #a3be8c);
 }
 
 .notice-err {
-  border-left: 3px solid var(--joy-err, #bf616a);
+  border-left-color: var(--joy-err, #bf616a);
 }
+
+/* 提示条是区块里的最后一块内容时，别在 2rem 区块间距上再叠一层 */
+.section > .notice:last-child {
+  margin-bottom: 0;
+}
+
+/* --- 空态 / 错误（§12） --- */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1.5rem 1rem;
+  color: var(--pico-muted-color);
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.pico .empty p {
+  margin: 0;
+}
+
+/* --- key 输入（§12 401） --- */
 
 .tp-authgate {
   max-width: 24rem;
 }
 
-.tp-authgate button {
+/* 鉴权门直接挂在 ApiProvider 上（卡片与面板共用），够不到 .panel 的内容列内边距：
+ * 面板形态下补一档，免得贴着 standalone 页边；卡片形态由壳的格子给留白，不加。 */
+:host(tp-panel) .tp-authgate {
+  margin: 1rem;
+}
+
+/* 鉴权门的提交按钮走动作档高度，但保留整行宽（表单主提交的形态）。
+ * 选择器要带 .pico 才压得过上面 .pico button 里的 width/margin。 */
+.pico .tp-authgate button {
   margin-top: 0.75rem;
   width: 100%;
 }

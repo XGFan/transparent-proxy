@@ -83,36 +83,39 @@ export function TpPanel() {
   }, []);
 
   if (loading && !status) {
-    return <article aria-busy="true">加载中...</article>;
+    return <div className="panel" aria-busy="true">加载中...</div>;
   }
 
   if (error && !status) {
+    // 面板不渲染组件名（视觉语言 §1，宿主已给身份），失败态就是一条 notice + 重试。
     return (
-      <article>
-        <header>Transparent Proxy</header>
-        <p className="muted">{error}</p>
+      <div className="panel">
+        <div className="notice notice-err">{error}</div>
         <button type="button" className="secondary" onClick={refresh}>重试</button>
-      </article>
+      </div>
     );
   }
 
   return (
-    <div>
-      <article>
-        <div className="toolbar">
+    // .panel 是面板的内容列（§5：72rem 居中 + 两侧 1rem），壳内与 standalone 同一份。
+    <div className="panel">
+      {/* 首个区块没有卡壳（§6）：开关本体连同它的文字就是区块头的左半边，
+          右半边放两个安静动作；提示条作为这一块的内容排在分隔线下方。 */}
+      <section className="section">
+        <div className="section-head">
           <ProxyToggle proxy={status?.proxy} updating={proxyUpdating} onToggle={handleProxyToggle} />
-          <div className="actions">
+          <div className="section-actions">
             <button type="button" className="secondary outline" onClick={refresh}>刷新</button>
             <button type="button" className="secondary" onClick={handleSyncRules}>同步规则</button>
           </div>
         </div>
-      </article>
 
-      {notice && (
-        <div className={`notice ${notice.type === 'success' ? 'notice-ok' : 'notice-err'}`}>
-          {notice.text}
-        </div>
-      )}
+        {notice && (
+          <div className={`notice ${notice.type === 'success' ? 'notice-ok' : 'notice-err'}`}>
+            {notice.text}
+          </div>
+        )}
+      </section>
 
       <SettingsCard checkerStatus={status?.checker} />
 

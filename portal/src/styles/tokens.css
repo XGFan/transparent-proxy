@@ -2,9 +2,17 @@
  * 各组件仓库 vendor 复制本文件，勿加组件私有样式；改动后手动同步四处。
  * 注意：下面的 --pico-* 映射写在裸 :root,:host（特异性 0,1,0），会被 Pico v2 主题块
  * :host(:not([data-theme=dark]))（0,2,0）压住——必须配合 @layer（Pico 入低层）或把映射
- * 复制到 .pico 容器上才生效，详见 net-console docs/panel-contract.md「特异性陷阱」。 */
+ * 复制到 .pico 容器上才生效，详见 net-console docs/panel-contract.md「特异性陷阱」。
+ *
+ * 选择器里的 [data-theme="light"]（2026-08-06）：主题固定亮色后，宿主元素带上了
+ * data-theme="light"，而壳页面（light DOM）那份 Pico 的亮色主题块有个裸 [data-theme=light]
+ * 选择器，会在 document 层直接命中面板/卡片的宿主元素、把整套 --pico-* 默认值（azure）
+ * 写上去——document 规则对宿主压过 shadow 内所有 :host 规则，joy 映射整条被劫持
+ * （实测表现：开关选中色退回 azure）。让本映射骑上同一个选择器、站在更高的 joy 层，
+ * 劫持自然消解。 */
 :root,
-:host {
+:host,
+[data-theme="light"] {
   --joy-font: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   --joy-radius: 6px;
 
@@ -22,4 +30,15 @@
   --pico-primary-hover: var(--joy-accent-hover);
   --pico-primary-background: var(--joy-accent);
   --pico-primary-hover-background: var(--joy-accent-hover);
+
+  /* secondary：次要动作的「安静」形态（2026-08-06）。Pico 默认是深石板灰实心块
+   * （#525f7a），四个面板里凡是 class="secondary" 的按钮都是一坨深色，压过状态信息。
+   * 改成浅灰底深字的 chip，层级让位给 accent 主操作；outline 形态文字用中性灰蓝。 */
+  --pico-secondary: #64708a;
+  --pico-secondary-hover: #4c566a;
+  --pico-secondary-background: #e5e9f0;
+  --pico-secondary-hover-background: #d8dee9;
+  --pico-secondary-border: #d8dee9;
+  --pico-secondary-hover-border: #c9d2e0;
+  --pico-secondary-inverse: #3b4252;
 }

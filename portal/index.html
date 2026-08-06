@@ -1,17 +1,43 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Transparent Proxy</title>
     <style>
-      body { margin: 0; padding: 1rem; background: #fff; }
-      @media (prefers-color-scheme: dark) { body { background: #13161e; } }
+      /* standalone 宿主页只负责白底 + 一个静态页头（视觉语言 §14）；内容列的宽度、留白
+         与全部控件样式都归面板自己（Shadow DOM 里那份 panel.css）——所以 body 不再加
+         padding，否则会跟面板自带的 1rem 内容列留白叠成两层。 */
+      /* 主题固定亮色（面板契约「样式 → 主题固定亮色」），不再跟随 prefers-color-scheme。
+         暗色规则不删，改由 data-theme=dark 门控，将来做主题开关直接可用。 */
+      html { color-scheme: light; }
+      body {
+        margin: 0;
+        background: #fff;
+        color: #1f2328;
+        font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      html[data-theme="dark"] { color-scheme: dark; }
+      html[data-theme="dark"] body { background: #13161e; color: #e5e9f0; }
+      /* 页头对齐面板的内容列：同样 72rem 居中、左右 1rem，标题与面板里第一个区块头是同一条竖线。 */
+      header {
+        box-sizing: border-box;
+        max-width: 72rem;
+        margin: 0 auto;
+        padding: 1rem 1rem 0;
+      }
+      h1 { font-size: 1.15rem; margin: 0 0 0.25rem; }
+      .sub { margin: 0; font-size: 0.85rem; color: #6b7280; }
     </style>
   </head>
   <body>
-    <!-- standalone 宿主页：只负责加载 panel.js 并挂载 <tp-panel>（面板契约 §standalone portal） -->
+    <!-- standalone 宿主页：页头给身份（面板自己不渲染组件名，视觉语言 §1），
+         其余只负责加载 panel.js 并挂载 <tp-panel>（面板契约 §standalone portal） -->
+    <header>
+      <h1>Transparent Proxy</h1>
+      <p class="sub">nftables 透明代理：开关、健康检查与规则集管理</p>
+    </header>
     <tp-panel api-base="/api"></tp-panel>
     <script type="module" src="/src/panel.tsx"></script>
   </body>

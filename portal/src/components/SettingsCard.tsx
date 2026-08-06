@@ -74,10 +74,11 @@ export function SettingsCard({ checkerStatus }: Props) {
   const badge = checkerBadge(checkerStatus);
 
   return (
-    <article>
-      <header>
-        <span>系统设置</span>
-        <span className="actions">
+    // 区块直接排在页面上，不套外层大卡（§6）；里面的三个分组是唯一一级子卡。
+    <section className="section">
+      <div className="section-head">
+        <h2 className="section-title">系统设置</h2>
+        <span className="section-actions">
           {editing ? (
             <>
               <button type="button" className="secondary outline" onClick={handleCancel}>取消</button>
@@ -91,7 +92,7 @@ export function SettingsCard({ checkerStatus }: Props) {
             </button>
           )}
         </span>
-      </header>
+      </div>
 
       {message && (
         <div className={`notice ${message.type === 'success' ? 'notice-ok' : 'notice-err'}`}>{message.text}</div>
@@ -223,6 +224,6 @@ export function SettingsCard({ checkerStatus }: Props) {
           </label>
         </article>
       </div>
-    </article>
+    </section>
   );
 }
