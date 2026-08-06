@@ -51,6 +51,10 @@ export default defineConfig({
       '/api': {
         target: process.env.PORTAL_API_TARGET || 'http://localhost:1444',
         changeOrigin: true,
+        // dev 代理直连真实后端（已开启鉴权）时注入 key；未设置该变量则不加头，行为不变
+        ...(process.env.PORTAL_API_KEY
+          ? { headers: { 'X-Api-Key': process.env.PORTAL_API_KEY } }
+          : {}),
       },
     },
   },

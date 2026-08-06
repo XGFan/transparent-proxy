@@ -32,6 +32,11 @@ npm run test:component         # Vitest 组件测试
 npx vitest                     # 组件测试 watch 模式
 npm run lint                   # ESLint 检查
 npm run test:e2e:blocking      # E2E 测试（需 OpenWrt VM）
+
+# 直连已开启鉴权的真实后端（dev 代理注入 X-Api-Key）
+PORTAL_API_TARGET=http://192.168.2.1:1444 \
+PORTAL_API_KEY=$(../../infra/ops/net-console-dev-env.sh transparent-proxy) \
+npm run dev
 ```
 
 ### 完整测试流程
@@ -112,7 +117,8 @@ transparent-proxy/
 ## 环境变量
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `PORTAL_API_TARGET` | 前端代理目标 | `http://localhost:8080` |
+| `PORTAL_API_TARGET` | 前端代理目标 | `http://localhost:1444` |
+| `PORTAL_API_KEY` | dev 代理注入的 `X-Api-Key`（直连已鉴权后端时用，留空则不注入） | 未设置 |
 | `TP_API_BASE_URL` | VM API 地址 | `http://127.0.0.1:1444` |
 | `TP_UI_BASE_URL` | Portal UI | `http://127.0.0.1:3000` |
 | `DEV_MODE` | 开发模式（Mac 本地调试）| 未设置 |

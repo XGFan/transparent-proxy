@@ -78,6 +78,13 @@ API responses use envelope: `{"code": "ok"|"invalid_request"|"unauthorized"|"int
 - **`lib/api/ApiProvider.tsx` / `context.ts`** — 注入 client；401/403 时切到 key 输入界面，提交后重挂载重试
 - **`styles/tokens.css`** — vendor 自 net-console `assets/tokens.css`（权威版在那边，勿在此改）
 - Vite dev server proxies `/api` → `http://localhost:1444` (override via `PORTAL_API_TARGET` env var)
+- 直连已开启鉴权的真实后端时，用 `PORTAL_API_KEY` 让 dev 代理注入 `X-Api-Key`（不设则不注入）：
+  ```bash
+  # 在 portal/ 目录下执行
+  PORTAL_API_TARGET=http://192.168.2.1:1444 \
+  PORTAL_API_KEY=$(../../infra/ops/net-console-dev-env.sh transparent-proxy) \
+  npm run dev
+  ```
 
 构建产物必须是 `server/web/panel.js` 单文件 + `index.html` 宿主页，无额外 chunk、无独立 CSS（`npm run build:verify` 会卡住违规）。
 
