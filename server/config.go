@@ -54,6 +54,11 @@ type CheckerConfig struct {
 	OnFailure        string `yaml:"on_failure,omitempty" json:"on_failure"`
 	Proxy            string `yaml:"proxy,omitempty" json:"proxy,omitempty"`
 	BarkToken        string `yaml:"bark_token,omitempty" json:"bark_token,omitempty"`
+	// BarkServer is the Bark server notifications are pushed to. Empty means
+	// the official https://api.day.app — applyDefaults/BuildDefaultConfig
+	// both fill it in so upgrading an existing config.yaml that doesn't
+	// mention this field keeps pushing to the same place it always did.
+	BarkServer string `yaml:"bark_server,omitempty" json:"bark_server,omitempty"`
 }
 
 type NftConfig struct {
@@ -136,6 +141,7 @@ func BuildDefaultConfig() *AppConfig {
 			Interval:         "30s",
 			FailureThreshold: 3,
 			OnFailure:        "disable",
+			BarkServer:       "https://api.day.app",
 		},
 		Nft: NftConfig{
 			StatePath: DefaultNftStatePath,
@@ -179,6 +185,9 @@ func (c *AppConfig) applyDefaults() {
 	}
 	if c.Checker.OnFailure == "" {
 		c.Checker.OnFailure = "disable"
+	}
+	if c.Checker.BarkServer == "" {
+		c.Checker.BarkServer = "https://api.day.app"
 	}
 	if c.Nft.StatePath == "" {
 		c.Nft.StatePath = DefaultNftStatePath

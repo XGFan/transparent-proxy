@@ -242,7 +242,7 @@ func (c *Checker) checkOnce(ctx context.Context, config CheckerConfig, client *h
 		}
 
 		if wasDown {
-			sendBarkNotification(config.BarkToken, "透明代理恢复")
+			sendBarkNotification(config.BarkServer, config.BarkToken, "透明代理恢复")
 		}
 		return
 	}
@@ -281,7 +281,7 @@ func (c *Checker) checkOnce(ctx context.Context, config CheckerConfig, client *h
 		if onFailure == "keep" {
 			action = "保持代理"
 		}
-		sendBarkNotification(config.BarkToken, fmt.Sprintf("透明代理错误，操作：%s", action))
+		sendBarkNotification(config.BarkServer, config.BarkToken, fmt.Sprintf("透明代理错误，操作：%s", action))
 	}
 
 	if onFailure == "keep" {
@@ -387,15 +387,18 @@ func buildCheckerClient(timeout time.Duration, proxyAddr string) *http.Client {
 
 // sendBarkNotification sends a push notification via Bark.
 // Failures are logged but never affect the caller.
-func sendBarkNotification(token, message string) {
+//
+// server empty falls back to the official https://api.day.app — this is the
+// backward-compat path for config.yaml files written before bark_server
+// existed: upgrading without touching the file must keep pushing to the
+// same place it always did.
+func sendBarkNotification(server, token, message string) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return
 	}
 
-	barkURL := fmt.Sprintf("https://api.day.app/%s/%s",
-		url.PathEscape(token),
-		url.PathEscape(message))
+	barkURL := buildBarkURL(server, token, message)
 
 	go func() {
 		client := &http.Client{Timeout: 10 * time.Second}
@@ -412,4 +415,16 @@ func sendBarkNotification(token, message string) {
 			log.Printf("bark notification failed: status %d", resp.StatusCode)
 		}
 	}()
+}
+
+// buildBarkURL builds the push URL without sending anything — a pure
+// function so the server-default/trailing-slash/escaping behavior can be
+// unit tested without a network mock.
+func buildBarkURL(server, token, message string) string {
+	server = strings.TrimSpace(server)
+	if server == "" {
+		server = "https://api.day.app"
+	}
+	server = strings.TrimSuffix(server, "/")
+	return fmt.Sprintf("%s/%s/%s", server, url.PathEscape(token), url.PathEscape(message))
 }

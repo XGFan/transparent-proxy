@@ -362,3 +362,45 @@ func TestChecker_NilSafety(t *testing.T) {
 	checker.Start(context.Background())
 	checker.UpdateConfig(CheckerConfig{})
 }
+
+// buildBarkURL 之前是硬编码 https://api.day.app，没有配置入口。这个测试覆盖
+// server 的默认回落、自建端点覆盖、以及去尾斜杠（避免拼出 "example.com//token"
+// 这种双斜杠 URL）。
+func TestBuildBarkURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		server  string
+		token   string
+		message string
+		want    string
+	}{
+		{
+			name:   "空_server_回落官方地址",
+			server: "", token: "tok", message: "msg",
+			want: "https://api.day.app/tok/msg",
+		},
+		{
+			name:   "自建端点以配置为准",
+			server: "https://bark.internal.example", token: "tok", message: "msg",
+			want: "https://bark.internal.example/tok/msg",
+		},
+		{
+			name:   "去掉尾部斜杠避免双斜杠",
+			server: "https://bark.internal.example/", token: "tok", message: "msg",
+			want: "https://bark.internal.example/tok/msg",
+		},
+		{
+			name:   "token或message里的特殊字符会被转义",
+			server: "", token: "a/b", message: "透明代理错误，操作：禁用代理",
+			want: "https://api.day.app/a%2Fb/%E9%80%8F%E6%98%8E%E4%BB%A3%E7%90%86%E9%94%99%E8%AF%AF%EF%BC%8C%E6%93%8D%E4%BD%9C%EF%BC%9A%E7%A6%81%E7%94%A8%E4%BB%A3%E7%90%86",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildBarkURL(tt.server, tt.token, tt.message)
+			if got != tt.want {
+				t.Errorf("buildBarkURL(%q, %q, %q) = %q, want %q", tt.server, tt.token, tt.message, got, tt.want)
+			}
+		})
+	}
+}

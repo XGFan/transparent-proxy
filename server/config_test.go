@@ -57,6 +57,38 @@ func TestParseConfig_AppliesDefaults(t *testing.T) {
 	if config.Checker.OnFailure != "disable" {
 		t.Errorf("Checker.OnFailure = %q, want disable", config.Checker.OnFailure)
 	}
+	if config.Checker.BarkServer != "https://api.day.app" {
+		t.Errorf("Checker.BarkServer = %q, want https://api.day.app", config.Checker.BarkServer)
+	}
+}
+
+// bark_server 之前完全没有配置入口（server/checker.go 的 sendBarkNotification
+// 硬编码 https://api.day.app）。这个测试钉住升级路径：旧 config.yaml 不写
+// bark_server 时必须继续推到官方地址，不能因为加了这个字段就静默改变行为；
+// 写了就要以配置为准，这是换自建/内网端点的唯一入口。
+func TestParseConfig_BarkServer(t *testing.T) {
+	t.Run("旧配置不写bark_server_落到官方地址", func(t *testing.T) {
+		raw := []byte("version: 1\nnft:\n  sets: [\"direct_dst\"]\nchecker:\n  bark_token: tok\n")
+		config, err := ParseConfig(raw)
+		if err != nil {
+			t.Fatalf("ParseConfig: %v", err)
+		}
+		if config.Checker.BarkServer != "https://api.day.app" {
+			t.Errorf("BarkServer = %q, want https://api.day.app（向后兼容）", config.Checker.BarkServer)
+		}
+	})
+
+	t.Run("显式指定则以配置为准", func(t *testing.T) {
+		raw := []byte("version: 1\nnft:\n  sets: [\"direct_dst\"]\n" +
+			"checker:\n  bark_token: tok\n  bark_server: https://bark.internal.example\n")
+		config, err := ParseConfig(raw)
+		if err != nil {
+			t.Fatalf("ParseConfig: %v", err)
+		}
+		if config.Checker.BarkServer != "https://bark.internal.example" {
+			t.Errorf("BarkServer = %q, want 自建端点覆盖默认值", config.Checker.BarkServer)
+		}
+	})
 }
 
 func TestValidate_RejectsInvalidPort(t *testing.T) {
