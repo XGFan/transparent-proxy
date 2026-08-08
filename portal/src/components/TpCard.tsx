@@ -1,28 +1,13 @@
-import { useCallback, useState } from 'preact/hooks';
-import { useApi } from '../lib/api/context';
 import { useStatus } from '../lib/useStatus';
-import { ProxyToggle } from './ProxyToggle';
-import { checkerBadge } from './status';
+import { checkerBadge, proxyStatusText } from './status';
 
 /**
- * <tp-card> 的内容：只读摘要 + 唯一高频操作（代理开关）。
+ * <tp-card> 的内容：纯只读摘要。
+ * 开关只在管理页提供（2026-08-08 反馈）：总览是「看一眼」的地方，
+ * 把改变全屋出口的操作摆在这儿太顺手，误碰代价又大。
  */
 export function TpCard() {
-  const api = useApi();
-  const { status, setStatus, loading, error, refresh } = useStatus();
-  const [updating, setUpdating] = useState(false);
-
-  const handleToggle = useCallback(async (enabled: boolean) => {
-    setUpdating(true);
-    try {
-      const proxy = await api.updateProxy(enabled);
-      setStatus(prev => (prev ? { ...prev, proxy } : prev));
-    } catch {
-      await refresh();
-    } finally {
-      setUpdating(false);
-    }
-  }, [api, setStatus, refresh]);
+  const { status, loading, error, refresh } = useStatus();
 
   if (loading && !status) {
     return <div aria-busy="true">加载中...</div>;
@@ -52,9 +37,13 @@ export function TpCard() {
         <li className="kv-val"><span className={checker.className}>{checker.text}</span></li>
         <li className="kv-key">规则条目</li>
         <li className="kv-val">{setCount}</li>
+        <li className="kv-key">透明代理</li>
+        <li className="kv-val">
+          <span className={`badge ${status?.proxy?.enabled ? 'badge-ok' : 'badge-warn'}`}>
+            {proxyStatusText(status?.proxy)}
+          </span>
+        </li>
       </ul>
-
-      <ProxyToggle proxy={status?.proxy} updating={updating} onToggle={handleToggle} />
     </div>
   );
 }
