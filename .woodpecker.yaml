@@ -6,12 +6,12 @@ steps:
   - name: build
     image: golang:1.25-alpine
     commands:
-      - apk add --no-cache nodejs npm tar fakeroot gzip bash git python3
+      - apk add --no-cache nodejs npm tar fakeroot gzip bash git python3 upx
       - SHORT_SHA=$(echo $CI_COMMIT_SHA | cut -c1-8)
       # 路由器是 x86_64；脚本默认 aarch64_generic，不显式指定就会打出一个
       # opkg 判为「no valid architecture」的包。以前 opkg 每次都拒绝安装，
       # 这个错配从未暴露过。
-      - OPENWRT_PACKAGE_ARCH=x86_64 bash scripts/build-openwrt-ipk.sh --version "v0.0.0-$SHORT_SHA"
+      - OPENWRT_PACKAGE_ARCH=x86_64 bash scripts/build-openwrt-ipk.sh --version "v0.0.0-$SHORT_SHA" --upx
       - ls -lh dist/ipk/*/artifacts/*.ipk
       - ls dist/ipk/*/artifacts/ | grep -q "_x86_64.ipk" || (echo "构建出的不是 x86_64 包" && exit 1)
 

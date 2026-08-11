@@ -13,6 +13,7 @@ PACKAGE="all"
 SKIP_FRONTEND=false
 OUTPUT_BASE="${DEFAULT_OUTPUT_BASE}"
 PREPARE_ONLY=false
+ENABLE_UPX=false
 
 ALL_PACKAGES=(
   "transparent-proxy"
@@ -27,6 +28,7 @@ usage() {
   -v, --version VERSION    版本号 (如 v1.0.0)，必填或从 git 推断
   -p, --package NAME       仅构建指定包: transparent-proxy | luci-app-transparent-proxy | all
   -s, --skip-frontend      跳过前端构建（调试用）
+  -u, --upx                对服务包内的二进制启用 UPX 压缩
   -o, --output-dir DIR     输出根目录 (默认: dist/ipk/)
       --prepare-only       仅校验 skeleton 并准备 deterministic 输出根目录
   -h, --help               显示帮助信息
@@ -273,6 +275,24 @@ build_backend() {
   echo "✓ 后端构建完成: ${output}"
 }
 
+compress_binary() {
+  local binary="$1"
+
+  if [[ "${ENABLE_UPX}" != true ]]; then
+    return 0
+  fi
+
+  require_command upx
+
+  echo "UPX 压缩..."
+
+  # --best --lzma 与 build-release.sh 保持一致；ipk 的 Installed-Size 在此之后
+  # 才用 du 统计，因此记录的是压缩后体积。
+  upx --best --lzma "${binary}"
+
+  echo "✓ UPX 压缩完成"
+}
+
 build_locally() {
   local output_root="$1"
   local package="$2"
@@ -315,6 +335,7 @@ build_service_ipk_locally() {
   # Binary
   mkdir -p "${data_root}/usr/bin"
   build_backend "${binary_path}"
+  compress_binary "${binary_path}"
 
   # Init script
   mkdir -p "${data_root}/etc/init.d"
@@ -454,6 +475,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_FRONTEND=true
       shift
       ;;
+    -u|--upx)
+      ENABLE_UPX=true
+      shift
+      ;;
     -o|--output-dir)
       OUTPUT_BASE="$2"
       shift 2
@@ -495,6 +520,7 @@ main() {
   echo "版本: ${VERSION}"
   echo "包: ${packages[*]}"
   echo "跳过前端: ${SKIP_FRONTEND}"
+  echo "UPX: ${ENABLE_UPX}"
   echo "输出根目录: ${output_root}"
   echo "=========================================="
 

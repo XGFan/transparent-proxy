@@ -88,6 +88,9 @@ dist/
 # 仅构建 LuCI 插件包
 ./scripts/build-openwrt-ipk.sh --package luci-app-transparent-proxy
 
+# 启用 UPX 压缩（压缩服务包内的二进制）
+./scripts/build-openwrt-ipk.sh --upx
+
 # 仅验证工作区和输出结构（不依赖 SDK）
 ./scripts/build-openwrt-ipk.sh --prepare-only
 ```
@@ -96,7 +99,11 @@ dist/
 
 | 选项 | 说明 | 默认值 |
 |------|------|--------|
+| `-v, --version` | 版本号（如 v1.0.0）| git describe 或 `v0.0.0-dev` |
 | `-p, --package` | 指定构建包（`transparent-proxy` 或 `luci-app-transparent-proxy`）| 两者都构建 |
+| `-s, --skip-frontend` | 跳过前端构建 | false |
+| `-u, --upx` | 对服务包内的二进制启用 UPX 压缩 | false |
+| `-o, --output-dir` | 输出根目录 | `dist/ipk/` |
 | `--prepare-only` | 仅验证工作区和输出结构 | false |
 | `-h, --help` | 显示帮助 | - |
 
@@ -114,8 +121,9 @@ dist/ipk/<version>/
 - 脚本采用本地 Minimal Packager 方式构建，不依赖 OpenWrt SDK。
 - `--prepare-only` 仅验证工作区 skeleton 和输出目录结构，不执行实际构建。
 - 脚本会自动清理 `dist/ipk/<version>/` 临时产物。
+- `--upx` 只作用于服务包 `transparent-proxy` 内的二进制，且发生在统计 `Installed-Size` 之前，因此 control 里记录的是压缩后体积；LuCI 包不受影响。CI（`.woodpecker.yaml`）默认带 `--upx`。
 
-**依赖：** `go`, `npm`, `python3`, `tar`
+**依赖：** `go`, `npm`, `python3`, `tar`, `upx`（仅 `--upx` 时需要）
 
 ## OpenWrt VM 测试脚本
 
