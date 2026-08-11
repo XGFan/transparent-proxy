@@ -46,6 +46,7 @@ steps:
     image: docker.test4x.com/xgfan/plugin-bark
     failure: ignore
     settings:
+      server: https://notify.test4x.com
       token:
         from_secret: bark_token
       status: success
@@ -54,6 +55,7 @@ steps:
     image: docker.test4x.com/xgfan/plugin-bark
     failure: ignore
     settings:
+      server: https://notify.test4x.com
       token:
         from_secret: bark_token
       status: failure
