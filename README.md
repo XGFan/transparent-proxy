@@ -66,7 +66,7 @@ api_key: "填了才启用鉴权"
 
 前端按面板契约（net-console 仓库 `docs/panel-contract.md`）构建成单文件自包含 ES module：
 
-- `GET /panel.js` — 注册 `<tp-card>`（只读摘要 + 代理开关）和 `<tp-panel>`（完整管理页），响应 `Cache-Control: no-cache`
+- `GET /panel.js` — 注册 `<tp-card>`（只读摘要）和 `<tp-panel>`（完整管理页），响应 `Cache-Control: no-cache`
 - `GET /` — standalone 宿主页，加载 `/panel.js` 并挂载 `<tp-panel api-base="/api">`
 - 两个元素都用 open shadow DOM，样式（Pico v2 conditional + joy tokens）全部内联进 shadow，可被 net-console 直接嵌入：
 
