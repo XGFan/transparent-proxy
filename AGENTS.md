@@ -1,37 +1,31 @@
 # AGENTS.md
 
-此文件为 AI 编码代理（如 Claude Code、Cursor 等）提供项目上下文。
-
 ## 项目概述
 
-透明代理管理工具，管理 Linux nftables 规则。前后端分离架构：
-- **后端**：Go 1.22 (Gin) - nftables ipset、网络检查、OpenWrt 配置管理
-- **前端**：Preact 10 + TypeScript + Vite - Web Components 面板（`<tp-card>` / `<tp-panel>`，构建成单文件 `server/web/panel.js`）
-- **测试**：三层体系（Go 单元测试 + Vitest 组件测试 + Playwright E2E）
+OpenWrt 路由器上的透明代理管理工具，管理 nftables 规则：
+- **后端** `server/`：Go（版本见 `server/go.mod`）+ Gin，管理 nftables set、出口健康检查、chnroute、配置；构建时嵌入前端
+- **前端** `portal/`：Preact + TypeScript + Vite，Web Components 面板（`<tp-card>` / `<tp-panel>`），lib 模式构建成单文件 `server/web/panel.js`
 
-## 构建命令
+相关文档：`docs/local-development.md`、`docs/vm-testing.md`、`docs/build-scripts.md`、`docs/system-architecture.md`。
 
-### 后端 (server/)
+## 构建与测试
+
+### 后端（`server/`）
 ```bash
-cd server
-go build -o transparent-proxy .          # 构建（需先构建前端）
-sudo ./transparent-proxy -c ../config.yaml  # 运行（需 root）
-go test ./...                             # 测试所有
-go test ./path/to/package -run ^TestName$ # 测试单个函数
-go test -cover ./...                      # 覆盖率
-go mod tidy                                # 整理依赖
+go build -o transparent-proxy .              # 需先构建前端
+sudo ./transparent-proxy -c ../config.yaml   # 需 root；默认配置路径 /etc/transparent-proxy/config.yaml
+go test ./...
+go test -run ^TestName$ .
+gofmt -w . && go vet ./...
 ```
 
-### 前端 (portal/)
+### 前端（`portal/`）
 ```bash
-cd portal
-npm install                    # 安装依赖
-npm start                      # 开发服务器 http://localhost:3000
-npm run build                  # 类型检查 + 构建 → ../server/web/
-npm run test:component         # Vitest 组件测试
-npx vitest                     # 组件测试 watch 模式
-npm run lint                   # ESLint 检查
-npm run test:e2e:blocking      # E2E 测试（需 OpenWrt VM）
+npm install
+npm start                   # dev server 127.0.0.1:3000，/api 代理到 :1444
+npm run build               # 类型检查 + 构建 + build:verify → ../server/web/
+npm run test:component      # Vitest 组件测试
+npm run lint                # ESLint 9，--max-warnings 0
 
 # 直连已开启鉴权的真实后端（dev 代理注入 X-Api-Key）
 PORTAL_API_TARGET=http://192.168.2.1:1444 \
@@ -39,118 +33,68 @@ PORTAL_API_KEY=$(../../infra/ops/net-console-dev-env.sh transparent-proxy) \
 npm run dev
 ```
 
-### 完整测试流程
+**构建顺序**：前端先构建到 `server/web/`（`panel.js` 不入库），Go 再 `//go:embed web` 嵌入。
+
+### Mac 本地开发（无需 root/VM）
 ```bash
-# PR 阻塞层
-cd server && go test ./... && cd ../portal && npm run test:component
-bash scripts/openwrt-vm/test-all.sh --tier blocking
-
-# 完整回归层
-bash scripts/openwrt-vm/test-all.sh --tier regression
+cd server && DEV_MODE=1 go run . -c ../config.yaml   # 终端 1
+cd portal && npm start                                # 终端 2，访问 http://localhost:3000
 ```
+`DEV_MODE=1` 用内存 mock 替代 nft 命令和文件读写；chnroute 拉取仍走真实 HTTP。
 
-## 代码风格指南
-
-### Go 后端
-**导入顺序**：标准库 → 空行 → 第三方库 → 空行 → 本地模块
-
-**命名**：PascalCase 导出，camelCase 私有，接口用 -er 后缀
-
-**错误处理**：
-```go
-if err != nil {
-    return fmt.Errorf("operation failed: %w", err)
-}
-```
-- 禁止忽略错误
-- `log.Printf` 记录日志，`utils.PanicIfErr` 处理启动致命错误
-
-**测试**：`*_test.go` 同目录，`Test<Name>` 命名，用 `t.Run()` 组织子测试
-
-### TypeScript/React 前端
-**导入顺序**：样式 → 第三方库 → 本地模块（`@/` 别名）
-
-**命名**：组件 PascalCase，变量/函数 camelCase，data-testid 用小写连字符
-
-**TypeScript 严格配置**：`strict: true`，`noUnusedLocals/Parameters: true`，禁止 `as any`
-
-**Hooks**：必须声明依赖数组，用 `useCallback` 缓存回调
-
-**错误处理**：
-```typescript
-// axios 必须有 .catch() 或 try/catch
-err.response?.data?.error || err.message
-```
-
-**测试**（Vitest + Testing Library）：
-```typescript
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-```
-
-## Lint 配置
-- **前端**：ESLint 9 + TypeScript ESLint，`npm run lint`，`--max-warnings 0`
-- **后端**：`gofmt -w .` 格式化，`go vet ./...` 检查
-
-## 项目结构
-```
-transparent-proxy/
-├── server/           # Go 后端（main.go, app.go, api_*.go, *_service.go, *_test.go）
-├── portal/           # Preact 前端（src/wc/, src/components/, src/lib/, src/styles/）
-├── scripts/openwrt-vm/  # OpenWrt VM 测试脚本
-├── files/            # 管理文件资产
-├── docs/             # 文档
-├── config.yaml       # 运行配置（version: v3）
-└── .drone.yml        # CI/CD 配置
-```
-
-## 运行配置
-`config.yaml` 包含：`version`（v3）、`checker`（网络检查目标）、`nft`（ipset 配置）、`externalConfigs`、`managedFiles`
-
-## 开发注意事项
-1. **权限**：后端需 root 执行 nft 命令
-2. **构建顺序**：前端先构建到 `server/web/`，Go 再构建嵌入
-3. **类型安全**：TypeScript 严格模式，禁止 `as any`
-4. **并发安全**：Go 用 `sync.RWMutex` 保护共享状态
-5. **E2E 测试**：需 OpenWrt VM，详见 `docs/openwrt-vm-testing.md`
-
-## 环境变量
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `PORTAL_API_TARGET` | 前端代理目标 | `http://localhost:1444` |
-| `PORTAL_API_KEY` | dev 代理注入的 `X-Api-Key`（直连已鉴权后端时用，留空则不注入） | 未设置 |
-| `TP_API_BASE_URL` | VM API 地址 | `http://127.0.0.1:1444` |
-| `TP_UI_BASE_URL` | Portal UI | `http://127.0.0.1:3000` |
-| `DEV_MODE` | 开发模式（Mac 本地调试）| 未设置 |
-
-## Mac 本地开发
-
+### OpenWrt VM 测试
 ```bash
-# 终端 1：后端（开发模式，无需 root/VM）
-cd server
-DEV_MODE=1 go run . -c ../config.yaml
-
-# 终端 2：前端
-cd portal
-npm start
-
-# 浏览器访问
-open http://localhost:3000
+bash scripts/openwrt-vm/test-all.sh   # go test + VM 平台集成（hotplug、ipk 安装/升级/卸载、LuCI 探针）
+bash scripts/openwrt-vm/test-common.sh --ensure-vm-ready   # 单独拉起并部署 VM
 ```
+VM 地址等契约变量见 `scripts/openwrt-vm/env.sh`（`TP_API_BASE_URL`、`TP_UI_BASE_URL` 等）。
 
-开发模式特性：
-- Mock `nft` 命令，内存存储 ipset
-- 文件写入重定向到临时目录
-- 无需 OpenWrt/VM 即可调试 UI 和 API
+### 打包
+```bash
+bash scripts/build-openwrt-ipk.sh --version v1.0.0 [--upx] [--package transparent-proxy]   # 服务 + luci-app ipk，含前端构建
+bash scripts/build-release.sh --version v1.0.0     # linux/arm64 单二进制
+```
+`build-openwrt-ipk.sh` 默认架构 aarch64_generic，路由器是 x86_64，需设 `OPENWRT_PACKAGE_ARCH=x86_64`，否则 opkg 拒装。
 
-详见 `docs/development.md`。
+## CI / 部署
 
-## 脚本
+Woodpecker（`.woodpecker.yaml`，push 到 `master`）：构建 x86_64 ipk（含 UPX）→ 只把服务 ipk 和 `deploy/openwrt/ci-deploy.sh` 传到路由器执行 → Bark 通知。CI 不跑测试。
+- 不装 luci-app（net-console ADR-0005：LuCI 入口退役），但仍构建防烂。
+- 部署逻辑必须放在 `ci-deploy.sh` 里：内联一行 ssh 要穿过 CI sh 与 busybox ash 两层引号，实测会崩。
+- 传包前清空 `/tmp/tp-deploy`，否则 opkg 一次收到多个 ipk 会段错误。
+- 版本号是 `0.0.0-<sha8>`，必须 `--force-downgrade`，否则 opkg 以"已是最新"拒装且返回 0。
+- 验证通过才存为 lastgood（`/mnt/ext` 上），失败自动装回。
 
-| 脚本 | 用途 |
-|------|------|
-| `scripts/generate-manifest.sh` | 自动生成 `files/managed-manifest.json` |
-| `scripts/build-release.sh` | 构建 OpenWrt ARM64 发布包 |
-| `scripts/openwrt-vm/` | OpenWrt VM 测试脚本 |
+## 架构
 
-详见 `docs/scripts.md`。
+### 后端
+- `main.go` 组装依赖：`NftExecutor` / `FileStore` / `RemoteFetcher` 三个接口，生产实现 `ExecNftRunner` / `OSFileStore` / `HTTPFetcher`，DEV_MODE 与测试用 `mock.go` 的 `MemoryNft` / `MemoryFileStore` / `MemoryFetcher`
+- `app.go`：`App` 生命周期 bootstrap → run（checker + chnroute + HTTP）
+- `nft.go`：`NftManager` 负责 set 增删、代理开关、模板渲染（`templates/*.tmpl`，`//go:embed`）
+- `checker.go`：周期健康检查并切换代理状态；`on_failure: disable|keep`，探测可走 SOCKS5，状态变化推 Bark（`bark_server` 为空则用官方 api.day.app）
+- `chnroute.go`：拉 APNIC 数据生成 chnroute.nft 并定期刷新
+- `api.go`：全部路由在 `/api/` 下；响应信封 `{"code", "message", "data"}`，`code` 为 `ok` 或错误码（`invalid_request`、`unauthorized`、`internal_error` 等）
+- `auth.go`：
+  - `X-Api-Key` 中间件作用于全部 `/api/*`，`api_key` 为空则不鉴权
+  - `writeGuard`：写方法要求 `Content-Type: application/json`（415，**配了 key 也校验**——net-console 反代会代注 key，挡不住经壳打来的跨站简单请求）；未配 key 时另校验 Origin/Referer 同源（403）
+- `web.go`：`/panel.js` 单列为 `Cache-Control: no-cache` 路由，必须注册在静态中间件之前，否则拿不到该头
+
+### nft 文件
+- 静态（ipk 安装到 `/etc/nftables.d/`）：`reserved_ip.nft`（保留地址 set）、`v6block.nft`（IPv6 DHCPv6 input/forward 过滤，引用 `@allow_v6_mac`）
+- 运行时由模板渲染：`proxy.nft`（tproxy 链，用配置的端口/mark）、`transparent.nft`（mangle 挂钩，用配置的 LAN 接口）、`set.nft`（set 定义）
+
+### 前端（`portal/src/`）
+按面板契约（net-console 仓库 `docs/panel-contract.md`）产出单文件自包含 ES module。
+- `panel.tsx` 注册 `<tp-card>`（只读摘要，不放代理开关——误碰代价大）与 `<tp-panel>`（代理开关、规则同步、设置、规则集）
+- `wc/define.ts`：custom element 基类，open shadow DOM、挂载时读 `api-base`、防重复注册
+- `styles/shadow.css` 用 `@layer pico, joy` 分层引入 Pico conditional + tokens + panel.css，经 `wc/styles.ts` 以 `?inline` 注入 shadow。**必须分层**：Pico 主题块选择器 `:host(:not([data-theme=dark]))`（0,2,0）压过 tokens 的裸 `:root,:host`（0,1,0），只调引入顺序无效
+- `styles/tokens.css` vendor 自 net-console `assets/tokens.css`，权威版在那边，勿在此改
+- `lib/api/client.ts` 自动带 `X-Api-Key`（`localStorage['tp.apiKey']`）；`ApiProvider` 在 401/403 时切到 `ApiKeyForm`，提交后重挂载重试
+- 产物必须是 `server/web/panel.js` 单文件 + `index.html` 宿主页，无额外 chunk、无独立 CSS（`build:verify` 会卡住违规）
+
+### 配置（`config.yaml`，`version: 1`）
+结构见 `server/config.go`（`AppConfig`，含校验与原子保存）：`listen`（默认 `:1444`）、`api_key`、`proxy`（`lan_interface`、`default_port` 1081、`forced_port` 1082 供 proxy_src/proxy_dst、`self_mark` 255 用于排除代理自身流量）、`checker`、`nft`（`state_path`、`sets`）、`chnroute`。
+
+## 代码约定
+- Go：`fmt.Errorf("context: %w", err)` 包装错误，不忽略错误；测试用内存 mock，不碰真实 nft/文件系统
+- TypeScript：`strict`、`noUnusedLocals/Parameters`，禁止 `as any`；hooks 从 `preact/hooks` 引入，回调用 `useCallback`；`@/` 别名指向 `src/`
